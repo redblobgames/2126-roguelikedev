@@ -1,14 +1,13 @@
 /*
- * From https://www.redblobgames.com/x/2025-roguelike-dev/
- * Copyright 2020 Red Blob Games <redblobgames@gmail.com>
+ * From https://www.redblobgames.com/x/2126-roguelike-dev/
+ * Copyright 2021 Red Blob Games <redblobgames@gmail.com>
  * License: Apache-2.0 <http://www.apache.org/licenses/LICENSE-2.0.html>
  *
  * rot.js licensed under BSD 3-Clause "New" or "Revised" License
  * <https://github.com/ondras/rot.js/blob/master/license.txt>
  */
-'use strict';
 
-/* global ROT */
+import { RNG, FOV, Display, Map as ROT_Map, Util } from "./third-party/rotjs_lib/";
 
 // TODO: A reader suggests creating a div once and modifying it for all overlays instead
 // of recreating it for each overlay. Performance wasn't a high priority for me at the time
@@ -18,9 +17,9 @@ let DEBUG_ALL_EXPLORED = false;
 
 const WIDTH = 60, HEIGHT = 25;
 const STORAGE_KEY = window.location.pathname + '-savegame';
-ROT.RNG.setSeed(127);
+RNG.setSeed(127);
 
-const display = new ROT.Display({width: 60, height: 25, fontSize: 16, fontFamily: 'monospace'});
+const display = new Display({width: 60, height: 25, fontSize: 16, fontFamily: 'monospace'});
 display.getContainer().setAttribute('id', "game");
 document.querySelector("figure").appendChild(display.getContainer());
 
@@ -28,11 +27,11 @@ const EQUIP_MAIN_HAND = 0;
 const EQUIP_OFF_HAND = 1;
 
 /** like python's randint */
-const randint = ROT.RNG.getUniformInt.bind(ROT.RNG);
+const randint = RNG.getUniformInt.bind(RNG);
 
 /** step function: given a sorted table [[x, y], …] 
     and an input x1, return the y1 for the first x that is <x1 */
-function evaluateStepFunction(table, x) {
+function evaluateStepFunction(table: number[][], x: number) {
     let candidates = table.filter(xy => x >= xy[0]);
     return candidates.length > 0 ? candidates[candidates.length-1][1] : 0;
 }
@@ -60,7 +59,7 @@ function drawMessages() {
     messageBox.scrollTop = messageBox.scrollHeight;
 }
 
-function print(message, className) {
+function print(message: string, className: string) {
     messages.push([message, className]);
     messages.splice(0, messages.length - MAX_MESSAGE_LINES);
     drawMessages();
@@ -128,22 +127,25 @@ const entity_prototype = {
     get effective_power() { return this.base_power + this.increased_power; },
     get effective_defense() { return this.base_defense + this.increased_defense; },
 };
-for (let property of
+for (let property: string of
      new Set(Object.values(ENTITY_PROPERTIES).flatMap(p => Object.keys(p))).values()) {
     Object.defineProperty(entity_prototype, property,
                           {get() { return ENTITY_PROPERTIES[this.type][property]; }});
 }
 
+type Point = {x: number, y: number};
+type Location =
+    Point
+    | {carried_by: number, slot: number} // allowed only if .item
+    | {equipped_by: number, slot: number}; // allowed only if .equipment == slot
+
 /* Schema:
- * location: {x:int, y:int}
- *          | {carried_by:id, slot:int} -- allowed only if .item
- *          | {equipped_by:id, slot:int} -- allowed only if .equipment === slot
  * inventory: Array<null|int> - should only contain entities with .item
  * equipment: Array<null|int> - should contain only items with .equipment
  */
 const NOWHERE = {x: -1, y: -1}; // TODO: figure out a better location
 let entities = new Map();
-function createEntity(type, location, properties={}) {
+function createEntity(type: string, location: Location, properties={}) {
     let id = ++createEntity.id;
     let entity = Object.create(entity_prototype);
     entity.name = type;
@@ -158,23 +160,23 @@ function createEntity(type, location, properties={}) {
 createEntity.id = 0;
 
 /** euclidean distance */
-function distance(a, b) {
+function distance(a: Point, b: Point): number {
     return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
-/** return all entities at (x,y) */
-function allEntitiesAt(x, y) {
+/** return all entities at (x, y) */
+function allEntitiesAt(x: number, y: number) {
     return Array.from(entities.values()).filter(e => e.location.x === x && e.location.y === y);
 }
 
-/** return an item at (x,y) or null if there isn't one */
-function itemEntityAt(x, y) {
+/** return an item at (x, y) or null if there isn't one */
+function itemEntityAt(x: number, y: number) {
     let entities = allEntitiesAt(x, y).filter(e => e.item);
     return entities[0] || null;
 }
 
 /** return a blocking entity at (x,y) or null if there isn't one */
-function blockingEntityAt(x, y) {
+function blockingEntityAt(x: number, y: number) {
     let entities = allEntitiesAt(x, y).filter(e => e.blocks);
     if (entities.length > 1) throw `invalid: more than one blocking entity at ${x},${y}`;
     return entities[0] || null;
@@ -209,7 +211,7 @@ function swapEquipment(entity, inventory_slot, equipment_slot) {
  *   {carried_by_by:id slot:int} in id's 'inventory' 
  *   {equipped_by:id slot:int} is a valid location but NOT allowed here
  */
-function moveEntityTo(entity, location) {
+function moveEntityTo(entity, location: Location) {
     if (entity.location.carried_by !== undefined) {
         let {carried_by, slot} = entity.location;
         let carrier = entities.get(carried_by);
@@ -227,7 +229,7 @@ function moveEntityTo(entity, location) {
 }
 
 /** inventory is represented as an array with (null | entity.id) */
-function createInventoryArray(capacity) {
+function createInventoryArray(capacity: number): any[] {
     return Array.from({length: capacity}, () => null);
 }
 
@@ -272,7 +274,7 @@ function populateRoom(room, dungeonLevel) {
         let x = randint(room.getLeft(), room.getRight()),
             y = randint(room.getTop(), room.getBottom());
         if (!blockingEntityAt(x, y)) {
-            let type = ROT.RNG.getWeightedValue(monsterChances);
+            let type = RNG.getWeightedValue(monsterChances);
             createEntity(type, {x, y}, monsterProps[type]);
         }
     }
@@ -290,7 +292,7 @@ function populateRoom(room, dungeonLevel) {
         let x = randint(room.getLeft(), room.getRight()),
             y = randint(room.getTop(), room.getBottom());
         if (allEntitiesAt(x, y).length === 0) {
-            createEntity(ROT.RNG.getWeightedValue(itemChances), {x, y});
+            createEntity(RNG.getWeightedValue(itemChances), {x, y});
         }
     }
 }
@@ -311,14 +313,17 @@ function updateTileMapFov(tileMap) {
     // the save file but this fov should not. It just happens to work
     // because ROT doesn't expose the fov data in a JSON compatible
     // way, but it's not a great design.
-    tileMap.fov = new ROT.FOV.PreciseShadowcasting(
+    tileMap.fov = new FOV.PreciseShadowcasting(
         (x, y) => tileMap.has(x, y) && tileMap.get(x, y).walkable
     );
 }
     
 function createTileMap(dungeonLevel) {
-    let tileMap = createMap();
-    const digger = new ROT.Map.Digger(WIDTH, HEIGHT);
+    let tileMap = {
+        ...createMap(),
+        dungonLvl,
+        
+    const digger = new ROT_Map.Digger(WIDTH, HEIGHT);
     digger.create((x, y, contents) =>
         tileMap.set(x, y, {
             walkable: contents === 0,
@@ -351,7 +356,7 @@ let tileMap = createTileMap(1);
 
 
 
-function computeLightMap(center, tileMap) {
+function computeLightMap(center: Point, tileMap) {
     let lightMap = createMap(); // 0.0–1.0
     tileMap.fov.compute(center.x, center.y, 10, (x, y, r, visibility) => {
         lightMap.set(x, y, visibility);
@@ -439,7 +444,7 @@ function serializeGlobalState() {
         tileMap: tileMap,
         messages: messages,
         nextEntityId: createEntity.id,
-        rngState: ROT.RNG.getState(),
+        rngState: RNG.getState(),
     };
     return JSON.stringify(saved);
 }
@@ -454,7 +459,7 @@ function deserializeGlobalState(json) {
     Object.assign(tileMap, saved.tileMap);
     updateTileMapFov(tileMap);
     messages = saved.messages;
-    ROT.RNG.setState(saved.rngState);
+    RNG.setState(saved.rngState);
 }
 
 
@@ -469,7 +474,7 @@ function useItem(entity, item) {
             print(`You are already at full health`, 'warning');
         } else {
             print(`Your wounds start to feel better!`, 'healing');
-            entity.hp = ROT.Util.clamp(entity.hp + healing, 0, entity.effective_max_hp);
+            entity.hp = Util.clamp(entity.hp + healing, 0, entity.effective_max_hp);
             moveEntityTo(item, NOWHERE);
             enemiesMove();
         }
@@ -531,12 +536,12 @@ function dropItem(entity, item) {
 //////////////////////////////////////////////////////////////////////
 // leveling
 
-function xpForLevel(level) {
+function xpForLevel(level: number): number {
     return 200 * level + 150 * (level * (level+1)) / 2;
 }
 
 
-function gainXp(entity, amount) {
+function gainXp(entity, amount: number) {
     if (entity.xp === undefined) { return; } // this entity doesn't gain experience
     entity.xp += amount;
     if (entity.id !== player.id) { throw `XP for non-player not implemented`; }
@@ -552,7 +557,7 @@ function gainXp(entity, amount) {
 //////////////////////////////////////////////////////////////////////
 // combat
 
-function takeDamage(source, target, amount) {
+function takeDamage(source, target, amount: number) {
     target.hp -= amount;
     if (target.hp <= 0) {
         print(`${target.name} dies!`, target.id === player.id? 'player-die' : 'enemy-die');
@@ -576,7 +581,7 @@ function attack(attacker, defender) {
 }
 
 /** return true if the item was used */
-function castFireball(caster, x, y) {
+function castFireball(caster, x: number, y: number) {
     const maximum_range = 3;
     const damage = 25;
     let visibleToCaster = computeLightMap(caster.location, tileMap);
@@ -602,7 +607,7 @@ function castFireball(caster, x, y) {
 }
 
 /** return true if the item was used */
-function castConfusion(caster, x, y) {
+function castConfusion(caster, x: number, y: number) {
     let visibleToCaster = computeLightMap(caster.location, tileMap);
     if (!(visibleToCaster.get(x, y) > 0)) {
         print(`You cannot target a tile outside your field of view.`, 'warning');
@@ -664,7 +669,7 @@ function playerPickupItem() {
     enemiesMove();
 }
 
-function playerMoveBy(dx, dy) {
+function playerMoveBy(dx: number, dy: number) {
     let x = player.location.x + dx,
         y = player.location.y + dy;
     if (tileMap.get(x, y).walkable) {
@@ -695,8 +700,8 @@ function playerGoDownStairs() {
     tileMap = createTileMap(tileMap.dungeonLevel + 1);
 
     // Heal the player
-    player.hp = ROT.Util.clamp(player.hp + Math.floor(player.effective_max_hp / 2),
-                               0, player.effective_max_hp);
+    player.hp = Util.clamp(player.hp + Math.floor(player.effective_max_hp / 2),
+                           0, player.effective_max_hp);
 
     print(`You take a moment to rest, and recover your strength.`, 'welcome');
     draw();
@@ -768,11 +773,12 @@ function enemiesMove() {
 
 //////////////////////////////////////////////////////////////////////
 // ui
+type Action = string[];
 
 function createTargetingOverlay() {
     const overlay = document.querySelector(`#targeting`);
     let visible = false;
-    let callback = () => { throw `set callback`; };
+    let callback = (_x, _y) => { throw `set callback`; };
 
     function onClick(event) {
         let [x, y] = display.eventToPosition(event);
@@ -862,8 +868,8 @@ function createUpgradeOverlay() {
     };
 }
 
-function createInventoryOverlay(action) {
-    const overlay = document.querySelector(`#inventory-${action}`);
+function createInventoryOverlay(actionType: string) {
+    const overlay = document.querySelector(`#inventory-${actionType}`);
     let visible = false;
 
     function draw() {
@@ -880,7 +886,7 @@ function createInventoryOverlay(action) {
         if (empty) {
             html = `<div>Your inventory is empty. Press <kbd>ESC</kbd> to cancel.</div>${html}`;
         } else {
-            html = `<div>Select an item to ${action} it, or <kbd>ESC</kbd> to cancel.</div>${html}`;
+            html = `<div>Select an item to ${actionType} it, or <kbd>ESC</kbd> to cancel.</div>${html}`;
         }
         overlay.innerHTML = html;
     }
@@ -893,7 +899,7 @@ function createInventoryOverlay(action) {
 }
 
 
-function handlePlayerDeadKeys(key) {
+function handlePlayerDeadKeys(key: string): Action {
     const actions = {
         o:  ['toggle-debug'],
         r:  ['restore-game'],
@@ -902,7 +908,7 @@ function handlePlayerDeadKeys(key) {
     return actions[key];
 }
 
-function handlePlayerKeys(key) {
+function handlePlayerKeys(key: string): Action {
     const actions = {
         ArrowRight:  ['move', +1, 0],
         ArrowLeft:   ['move', -1, 0],
@@ -923,7 +929,7 @@ function handlePlayerKeys(key) {
     return action || handlePlayerDeadKeys(key);
 }
 
-function handleUpgradeKeys(key) {
+function handleUpgradeKeys(key): Action {
     const actions = {
         a:  ['upgrade', 'hp'],
         b:  ['upgrade', 'str'],
@@ -932,7 +938,7 @@ function handleUpgradeKeys(key) {
     return actions[key];
 }
 
-function handleInventoryKeys(action) {
+function handleInventoryKeys(action: string): (key: string) => Action {
     return key => {
         if (key === 'Escape') { return [`inventory-close-${action}`]; }
         let slot = key.charCodeAt(0) - 'a'.charCodeAt(0);
@@ -946,15 +952,15 @@ function handleInventoryKeys(action) {
     };
 }
 
-function handleCharacterKeys(key) {
+function handleCharacterKeys(key: string): Action {
     return (key === 'Escape' || key == 'c') && ['character-close'];
 }
     
-function handleTargetingKeys(key) {
+function handleTargetingKeys(key: string): Action {
     return key === 'Escape' && ['targeting-cancel'];
 }
 
-function runAction(action) {
+function runAction(action: Action) {
     switch (action[0]) {
     case 'move': {
         let [_, dx, dy] = action;
@@ -1041,7 +1047,7 @@ function currentKeyHandler() {
          : handlePlayerKeys;
 }
 
-function handleKeyDown(event) {
+function handleKeyDown(event: KeyboardEvent) {
     if (event.altKey || event.ctrlKey || event.metaKey) return;
     let action = currentKeyHandler()(event.key);
     if (action) {
@@ -1050,7 +1056,7 @@ function handleKeyDown(event) {
     }
 }
 
-function handleMousemove(event) {
+function handleMousemove(event: MouseEvent) {
     let lightMap = computeLightMap(player.location, tileMap);
     let [x, y] = display.eventToPosition(event); // returns -1, -1 for out of bounds
     let entities = lightMap.get(x, y) > 0.0 ? allEntitiesAt(x, y) : [];
@@ -1058,11 +1064,11 @@ function handleMousemove(event) {
     setOverlayMessage(text);
 }
 
-function handleMouseout(event) {
+function handleMouseout(event: MouseEvent) {
     setOverlayMessage("");
 }
 
-function setupInputHandlers(display) {
+function setupInputHandlers(display: Display) {
     const canvas = display.getContainer();
     const instructions = document.getElementById('focus-instructions');
     canvas.setAttribute('tabindex', "1");

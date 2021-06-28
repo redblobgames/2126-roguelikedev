@@ -1,7 +1,9 @@
 [[http://unmaintained.tech/badge.svg]]
 
-Each summer, the [[https://old.reddit.com/r/roguelikedev/][r/roguelikedev]] community has a [[https://old.reddit.com/r/roguelikedev/wiki/python_tutorial_series][tutorial series]] where we all follow along to build a roguelike.  I had attempted it in 2018 but got stuck in the middle. I attempted it again in 2020 and made it all the way through.
+Each summer, the [[https://old.reddit.com/r/roguelikedev/][r/roguelikedev]] community has a [[https://old.reddit.com/r/roguelikedev/wiki/python_tutorial_series][tutorial series]] where we all follow along to build a roguelike.  I had attempted it in 2018 but got stuck in the middle. I attempted it again in 2020 and made it all the way through. I am going through again in 2021, not to start over, but to revisit what I did in 2021.
 
-I wrote mine in JavaScript instead of Python. Unlike some of the other JavaScript projects, I didn't use node.js or a build step like webpack. It's one html file and one js file included with a <script> tag. This is how I prefer to code small projects, and only switch to more organization once the project gets larger.
+For the 2020 version I wrote mine in JavaScript instead of Python. Unlike some of the other JavaScript projects, I didn't use node.js or a build step like webpack. It's one html file and one js file included with a <script> tag. This is how I prefer to code small projects, and only switch to more organization once the project gets larger.
 
-[[https://www.redblobgames.com/x/2025-roguelike-dev/][I wrote notes]] about how my version differs from the Python tutorial, especially around UI, where I used the browser's HTML+CSS to build a UI instead of using a console menu. 
+For the 2021 version I will use TypeScript and multiple files bundled together using esbuild so that it is still included with a <script> tag.
+
+[[https://www.redblobgames.com/x/2025-roguelike-dev/][I wrote notes in 2020]] about how my version differs from the Python tutorial, especially around UI, where I used the browser's HTML+CSS to build a UI instead of using a console menu. [[https://www.redblobgames.com/x/2126-roguelike-dev/][I have notes in 2021]] as well.
