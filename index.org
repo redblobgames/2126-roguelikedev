@@ -16,6 +16,8 @@ Each summer r/roguelikedev has a [[https://old.reddit.com/r/roguelikedev/wiki/py
 
 #+include: "game.html" export html
 
+(Icons from [[https://game-icons.net][game-icons.net]], CC BY 3.0, see source of [[href:_symbol-table.html]] for list of sprites and their authors)
+
 This year, instead of going through the tutorial again from scratch, I'm going to revisit each chapter and try doing things differently. High level goals: tile graphics, thin walls (requiring a new map generator and a new field of view implementation), [[https://simblob.blogspot.com/2019/10/verb-noun-vs-noun-verb.html][noun-verb user interface]], more interesting monster behavior, redesigned stat and combat system, new control scheme, a small amount of animation.
 
 Source code: [[href:game.html][game.html]] + [[href:roguelike-dev.ts][roguelike-dev.ts]] (build with esbuild) - and [[https://github.com/redblobgames/2126-roguelikedev][on github]].
@@ -53,7 +55,32 @@ The first change  is to /keep/ the ASCII but render to SVG instead of rot.js. He
 
 [[./screenshots/ch1-svg.png]]
 
-The obvious difference is that the new renderer has /square tiles/. I'm planning to use square sprites so this is the size I will want. It just looks funny right now with ASCII characters. In last year's tutorial I made the map size 60⨉25. This makes sense for a terminal with tall characters, but with square tiles I might want to change it to something like 40⨉40. That's something to look at later.
+The main difference is that the new renderer has /square tiles/. I'm planning to use square sprites so this is the size I will want. It looks funny right now with ASCII characters. In last year's tutorial I made the map size 60⨉25. This makes sense for a terminal with tall characters, but with square tiles I might want to change it to something like 40⨉40. That's something to look at later.
+
+** Sprites
+:PROPERTIES:
+:CUSTOM_ID: display-ascii-to-sprites
+:END:
+
+The second change is to switch from ASCII to sprites.
+
+1. I modified the entity properties to include a sprite name, like [[https://game-icons.net/1x1/lorc/cowled.html]["cowled"]].
+2. I extracted the sprites into a =<symbol>= table using [[href:/x/2125-svg-symbols/][a python script I wrote]]
+
+It turned out to be /incredibly easy/ to implement:
+
+[[./screenshots/ch1-svg-sprites.png]]
+
+But it's too hard to read now! That's one of the advantages of ASCII: our brains have a lot of practice recognizing letters, but not a lot of practice recognizing this project's new shapes. I'm going to make the tile sizes larger to compensate for this.
+
+I kept the colors from the ASCII output but will want to adjust some of these colors to better fit the sprites.
+
+#+begin_comment
+../2125-svg-symbols/icon-to-svg-symbols.py cowled stairs troll orc-head carrion health-potion scroll-unfurled plain-dagger broadsword towel shield >_symbol-table.html
+#+end_comment
+
+#+include: "_symbol-table.html" export html
+
 
 
 #+begin_export html

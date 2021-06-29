@@ -125,24 +125,24 @@ const [setOverlayMessage, setTemporaryOverlayMessage] = (() => {
 // entities
 
 /** Entity properties that are shared among all the instances of the type.
-    visuals: [char, fg, optional bg, true if can be seen outside fov]
+    visuals: [sprite name, color]
     item: true if can go into inventory
     equipment_slot: 0–25 if it can go into equipment, undefined otherwise
  */
 const ENTITY_PROPERTIES = {
-    player: { blocks: true, render_order: 5, visuals: ['@', "hsl(60, 100%, 70%)"], },
-    stairs: { stairs: true, render_order: 1, visuals: ['>', "hsl(200, 100%, 90%)", undefined, true], },
-    troll:  { blocks: true, render_order: 3, visuals: ['T', "hsl(120, 60%, 30%)"], xp_award: 100, },
-    orc:    { blocks: true, render_order: 3, visuals: ['o', "hsl(100, 30%, 40%)"], xp_award: 35, },
-    corpse: { blocks: false, render_order: 0, visuals: ['%', "darkred"], },
-    'healing potion': { item: true, render_order: 2, visuals: ['!', "violet"], },
-    'lightning scroll': { item: true, render_order: 2, visuals: ['#', "hsl(60, 50%, 75%)"], },
-    'fireball scroll': { item: true, render_order: 2, visuals: ['#', "hsl(0, 50%, 50%)"], },
-    'confusion scroll': { item: true, render_order: 2, visuals: ['#', "hsl(0, 100%, 75%)"], },
-    dagger: { item: true, equipment_slot: EQUIP_MAIN_HAND, render_order: 2, bonus_power: 0, visuals: ['-', "hsl(200, 30%, 90%)"], },
-    sword: { item: true, equipment_slot: EQUIP_MAIN_HAND, render_order: 2, bonus_power: 3, visuals: ['/', "hsl(200, 30%, 90%)"], },
-    towel: { item: true, equipment_slot: EQUIP_OFF_HAND, render_order: 2, bonus_defense: 0, visuals: ['~', "hsl(40, 50%, 80%)"], },
-    shield: { item: true, equipment_slot: EQUIP_OFF_HAND, render_order: 2, bonus_defense: 1, visuals: ['[', "hsl(40, 50%, 80%)"], },
+    player: { blocks: true, render_order: 5, visuals: ['cowled', "hsl(60, 100%, 70%)"], },
+    stairs: { stairs: true, render_order: 1, visuals: ['stairs', "hsl(200, 100%, 90%)"], visible_in_shadow: true, },
+    troll:  { blocks: true, render_order: 3, visuals: ['troll', "hsl(120, 60%, 30%)"], xp_award: 100, },
+    orc:    { blocks: true, render_order: 3, visuals: ['orc-head', "hsl(100, 30%, 40%)"], xp_award: 35, },
+    corpse: { blocks: false, render_order: 0, visuals: ['carrion', "darkred"], },
+    'healing potion': { item: true, render_order: 2, visuals: ['health-potion', "violet"], },
+    'lightning scroll': { item: true, render_order: 2, visuals: ['scroll-unfurled', "hsl(60, 50%, 75%)"], },
+    'fireball scroll': { item: true, render_order: 2, visuals: ['scroll-unfurled', "hsl(0, 50%, 50%)"], },
+    'confusion scroll': { item: true, render_order: 2, visuals: ['scroll-unfurled', "hsl(0, 100%, 75%)"], },
+    dagger: { item: true, equipment_slot: EQUIP_MAIN_HAND, render_order: 2, bonus_power: 0, visuals: ['plain-dagger', "hsl(200, 30%, 90%)"], },
+    sword: { item: true, equipment_slot: EQUIP_MAIN_HAND, render_order: 2, bonus_power: 3, visuals: ['broadsword', "hsl(200, 30%, 90%)"], },
+    towel: { item: true, equipment_slot: EQUIP_OFF_HAND, render_order: 2, bonus_defense: 0, visuals: ['towel', "hsl(40, 50%, 80%)"], },
+    shield: { item: true, equipment_slot: EQUIP_OFF_HAND, render_order: 2, bonus_defense: 1, visuals: ['shield', "hsl(40, 50%, 80%)"], },
 };
 /* Always use the current value of 'type' to get the entity
     properties, so that we can change the object type later (e.g. to
@@ -428,17 +428,14 @@ function draw() {
             let tile = tileMap.get(x, y);
             if (!tile || (!DEBUG_ALL_EXPLORED && !tile.explored)) { continue; }
             let lit = DEBUG_ALL_EXPLORED || lightMap.get(x, y) > 0.0;
-            let ch = ' ',
-                fg = "black",
-                bg = mapColors[lit][tile.wall];
+            let bg = mapColors[lit][tile.wall];
+            svgInnerHtml += `<rect x="${x}" y="${y}" width="1" height="1" fill="${bg}" stroke="${bg}" stroke-width="0.05"/>`;
+            
             let glyph = glyphMap.get(x, y);
-            if (glyph) {
-                ch = lit || glyph[3] ? glyph[0] : ch;
-                fg = glyph[1];
-                bg = glyph[2] || bg;
+            if (glyph && (lit || tile.visible_in_shadow)) {
+                let [sprite, fg] = glyph;
+                svgInnerHtml += `<use x="${x}" y="${y}" width="1" height="1" href="#${sprite}" fill="${fg}" stroke="black" stroke-width="0.5"/>`;
             }
-            svgInnerHtml += `<rect x="${x}" y="${y}" fill="${bg}" width="1" height="1" />`;
-            svgInnerHtml += `<text x="${x+0.5}" y="${y+1}" text-anchor="middle" fill="${fg}">${htmlEscape(ch)}</text>`;
         }
     }
 
