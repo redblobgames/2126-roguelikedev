@@ -19,7 +19,28 @@ const WIDTH = 60, HEIGHT = 25;
 const STORAGE_KEY = window.location.pathname + '-savegame';
 RNG.setSeed(127);
 
-const display = new Display({width: 60, height: 25, fontSize: 16, fontFamily: 'monospace'});
+
+type Point = {x: number, y: number};
+type Location =
+    Point
+    | {carried_by: number, slot: number} // allowed only if .item
+    | {equipped_by: number, slot: number}; // allowed only if .equipment == slot
+type Entity = {
+    id: number,
+    type: string,
+    blocks?: boolean,
+    item?: boolean,
+    equipment_slot?: any,
+    render_order?: number,
+    visuals: any[],
+    location: Location,
+    inventory: (number | null)[], // should only contain entities with .item
+    equipment: (number | null)[] // should only contain items with .equipment
+    [key: string]: any,
+};
+
+
+const display = new Display({width: WIDTH, height: HEIGHT, fontSize: 16, fontFamily: 'monospace'});
 display.getContainer().setAttribute('id', "game");
 document.querySelector("figure").appendChild(display.getContainer());
 
@@ -132,22 +153,12 @@ for (let property: string of
     Object.defineProperty(entity_prototype, property,
                           {get() { return ENTITY_PROPERTIES[this.type][property]; }});
 }
-
-type Point = {x: number, y: number};
-type Location =
-    Point
-    | {carried_by: number, slot: number} // allowed only if .item
-    | {equipped_by: number, slot: number}; // allowed only if .equipment == slot
-
-/* Schema:
- * inventory: Array<null|int> - should only contain entities with .item
- * equipment: Array<null|int> - should contain only items with .equipment
- */
+    
 const NOWHERE = {x: -1, y: -1}; // TODO: figure out a better location
-let entities = new Map();
-function createEntity(type: string, location: Location, properties={}) {
+let entities = new Map<number, Entity>();
+function createEntity(type: string, location: Location, properties={}): Entity {
     let id = ++createEntity.id;
-    let entity = Object.create(entity_prototype);
+    let entity: Entity = Object.create(entity_prototype);
     entity.name = type;
     Object.assign(entity, { id, type, location: NOWHERE, ...properties });
     moveEntityTo(entity, location);
@@ -298,12 +309,12 @@ function populateRoom(room, dungeonLevel) {
 }
 
 function createMap() {
-    function key(x, y) { return `${x},${y}`; }
+    function key(x: number, y: number) { return `${x},${y}`; }
     return {
         _values: {},
-        has(x, y) { return this._values[key(x, y)] !== undefined; },
-        get(x, y) { return this._values[key(x, y)]; },
-        set(x, y, value) { this._values[key(x, y)] = value; },
+        has(x: number, y: number): boolean { return this._values[key(x, y)] !== undefined; },
+        get(x: number, y: number): any { return this._values[key(x, y)]; },
+        set(x: number, y: number, value: any) { this._values[key(x, y)] = value; },
     };
 }
 
@@ -321,7 +332,10 @@ function updateTileMapFov(tileMap) {
 function createTileMap(dungeonLevel) {
     let tileMap = {
         ...createMap(),
-        dungonLvl,
+        dungeonLevel,
+        rooms: [],
+        corridors: [],
+    };
         
     const digger = new ROT_Map.Digger(WIDTH, HEIGHT);
     digger.create((x, y, contents) =>
@@ -369,9 +383,9 @@ function computeLightMap(center: Point, tileMap) {
 }
 
 /** compute a per-tile map of entity visuals */
-function computeGlyphMap(entities) {
+function computeGlyphMap(entitiesMap: Map<number, Entity>) {
     let glyphMap = createMap();
-    entities = Array.from(entities.values());
+    let entities = Array.from(entitiesMap.values());
     entities.sort((a, b) => a.render_order - b.render_order);
     entities
         .filter(e => e.location.x !== undefined)

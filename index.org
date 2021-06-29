@@ -12,13 +12,28 @@ I don't expect that the org file itself will be useful to you, as it uses featur
 
 #+end_comment
 
-Each summer r/roguelikedev has a [[https://old.reddit.com/r/roguelikedev/wiki/python_tutorial_series][summer event]] in which we all make a simple roguelike, roughly following the libtcod roguelike tutorial. I've tried several times and actually finished in 2020, using [[https://ondras.github.io/rot.js/hp/][rot.js]] and Javascript. Last year, to keep the scope down, I told myself to implement only the topics from the tutorial, but make a list of things I might want to change.
+Each summer r/roguelikedev has a [[https://old.reddit.com/r/roguelikedev/wiki/python_tutorial_series][summer event]] in which we all make a simple roguelike, roughly following the libtcod roguelike tutorial. I've tried several times and [[href:/x/2025-roguelike-dev/][actually finished in 2020]], using [[https://ondras.github.io/rot.js/hp/][rot.js]] and Javascript. Last year, to keep the scope down, I told myself to implement only the topics from the tutorial, but make a list of things I might want to change.
 
 #+include: "game.html" export html
 
 This year, instead of going through the tutorial again from scratch, I'm going to revisit each chapter and try doing things differently. High level goals: tile graphics, thin walls (requiring a new map generator and a new field of view implementation), [[https://simblob.blogspot.com/2019/10/verb-noun-vs-noun-verb.html][noun-verb user interface]], more interesting monster behavior, redesigned stat and combat system, new control scheme, a small amount of animation.
 
 Source code: [[href:game.html][game.html]] + [[href:roguelike-dev.ts][roguelike-dev.ts]] (build with esbuild) - and [[https://github.com/redblobgames/2126-roguelikedev][on github]].
+
+* Setup
+:PROPERTIES:
+:CUSTOM_ID: setup
+:END:
+
+It's been a few years since I've used Typescript, and I wanted to dip my toes into it again, mainly because of the existence of [[https://esbuild.github.io/][esbuild]], which is /much/ faster and also handles bundling, two issues I had the last time I used Typescript. I switched the source code from Javascript to Typescript, renaming =roguelikedev.js= to =roguelikedev.ts= and adding a build step:
+
+#+include: "build.sh" src sh
+
+Esbuild is very fast and doesn't require me to have package.json etc. However it doesn't actually check the types; I only check the types in the code editor, using language server (lsp-mode in emacs). Since I'm converting from Javascript, some of my code is written in ways that Typescript can't verify the correctness, so esbuild not forcing the issue works better for me right now.
+
+One thing I want to have is a way to convert to Javascript /preserving formatting/, only stripping out types. Unfortunately, Esbuild throws away comments and formatting while stripping out types. The Typescript compiler is a little better, preserving comments but still changing the formatting and newlines. There are some workarounds [[https://github.com/microsoft/TypeScript/issues/843][on this page]] if I ever need to convert back to Javascript. Until then, your best bet is to run ~tsc -t esnext roguelike-dev.ts~ to produce =roguelike-dev.js=, which will be pretty close to the Typescript with the type annotations removed. If I ever want to give up on Typescript, or if my readers want to use Javascript instead of Typescript, this will come in handy.
+
+I went through the code and put in some (not all) types. There are a few places where my code was a bit sloppy so I had to clean it up to make the types work. I expect to add more types over time.
 
 
 #+begin_export html
@@ -36,7 +51,7 @@ Source code: [[href:game.html][game.html]] + [[href:roguelike-dev.ts][roguelike-
     }
   </style>
 
-  Created 18 Jun 2020 with the help of <a href="https://ondras.github.io/rot.js/hp/">rot.js</a>; &#160;
-  <!-- hhmts start -->Last modified: 28 Jun 2021<!-- hhmts end -->
+  Created 25 Jun 2021; &#160;
+  <!-- hhmts start -->Last modified: 29 Jun 2021<!-- hhmts end -->
 </x:footer>
 #+end_export
