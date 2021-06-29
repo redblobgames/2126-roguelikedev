@@ -1,5 +1,5 @@
 <figure id="game-container">
-  <svg id="newgame"/>
+  <svg id="game" tabindex="1" />
   <div id="status-bar"></div>
   <div id="health-bar"></div>
   <div id="health-text"></div>
@@ -23,32 +23,25 @@
         text-align: left;
         display: grid;
         justify-content: center;
-        grid-template-columns: min-content;
+        grid-template-columns: 1fr;
         grid-template-areas: "game" "status-bar" "message-area" "instructions";
     }
-    canvas#game { 
+
+    svg#game {
         grid-area: game;
         z-index: 1;
         display: block;
-        max-width: unset;
-        opacity: 0.5;
+        background: #333;
+        outline: 1px dotted hsla(150, 50%, 50%, 0.5);
+        opacity: 0.7;
     }
-    canvas#game:focus {
+    svg#game:focus {
         outline: none;
         opacity: 1.0;
     }
-
-    svg#newgame {
-        /*
-        grid-area: game;
-        z-index: 1;
-        */
-        display: block;
-        background: #333;
-    }
-    svg#newgame text {
+    svg#game text {
         font-size: 1px;
-        transform: translate(0, -0.1px);
+        transform: translate(0, -0.2px);
         font-family: monospace, sans-serif;
     }
     

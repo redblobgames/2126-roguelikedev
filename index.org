@@ -43,6 +43,9 @@ I went through the code and put in some (not all) types. There are a few places 
 This feels like a big change. I'm switching from ASCII to graphics. I wanted to break it up into smaller changes that I can think about, implement, and test. 
 
 ** SVG
+:PROPERTIES:
+:CUSTOM_ID: display-rotjs-to-svg
+:END:
 
 The first change  is to /keep/ the ASCII but render to SVG instead of rot.js. Here's the old and new renderer:
 

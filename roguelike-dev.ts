@@ -7,7 +7,7 @@
  * <https://github.com/ondras/rot.js/blob/master/license.txt>
  */
 
-import { RNG, FOV, Display, Map as ROT_Map, Util } from "./third-party/rotjs_lib/";
+import { RNG, FOV, Map as ROT_Map, Util } from "./third-party/rotjs_lib/";
 
 // TODO: A reader suggests creating a div once and modifying it for all overlays instead
 // of recreating it for each overlay. Performance wasn't a high priority for me at the time
@@ -40,14 +40,20 @@ type Entity = {
 };
 
 
-const display = new Display({width: WIDTH, height: HEIGHT, fontSize: 16, fontFamily: 'monospace'});
-display.getContainer().setAttribute('id', "game");
-document.querySelector("figure").appendChild(display.getContainer());
-
-const svgDisplay = {
-    el: document.querySelector("#newgame"),
+const display = {
+    el: document.querySelector("#game"),
+    eventToPosition(event) {
+        // Compatibility with ROT.js
+        let point = this.el.createSVGPoint();
+        point.x = event.clientX;
+        point.y = event.clientY;
+        let coords = point.matrixTransform(this.el.getScreenCTM().inverse());
+        let x = Math.floor(coords.x), y = Math.floor(coords.y);
+        if (0 <= x && x < WIDTH && 0 <= y && y < HEIGHT) { return [x, y]; }
+        else { return [-1, -1]; }
+    },
 };
-svgDisplay.el.setAttribute('viewBox', `0 0 ${WIDTH} ${HEIGHT}`);
+display.el.setAttribute('viewBox', `0 0 ${WIDTH} ${HEIGHT}`);
 
 function htmlEscape(rawString: string): string {
     return rawString
@@ -409,7 +415,6 @@ const mapColors = {
     [true]: {[false]: "rgb(200, 180, 50)", [true]: "rgb(130, 110, 50)"}
 };
 function draw() {
-    display.clear();
     let svgInnerHtml = ``;
     
     document.querySelector("#health-bar").style.width = `${Math.ceil(100*player.hp/player.effective_max_hp)}%`;
@@ -432,13 +437,12 @@ function draw() {
                 fg = glyph[1];
                 bg = glyph[2] || bg;
             }
-            display.draw(x, y, ch, fg, bg);
             svgInnerHtml += `<rect x="${x}" y="${y}" fill="${bg}" width="1" height="1" />`;
             svgInnerHtml += `<text x="${x+0.5}" y="${y+1}" text-anchor="middle" fill="${fg}">${htmlEscape(ch)}</text>`;
         }
     }
 
-    svgDisplay.el.innerHTML = svgInnerHtml;
+    display.el.innerHTML = svgInnerHtml;
     
     updateInstructions();
 }
@@ -815,7 +819,7 @@ function createTargetingOverlay() {
         callback(x, y);
         // Ugh, the overlay is nice for capturing mouse events but
         // when you click, the game loses focus. Workaround:
-        display.getContainer().focus();
+        display.el.focus();
     }
     function onMouseMove(event) {
         let [x, y] = display.eventToPosition(event);
@@ -1098,8 +1102,8 @@ function handleMouseout(event: MouseEvent) {
     setOverlayMessage("");
 }
 
-function setupInputHandlers(display: Display) {
-    const canvas = display.getContainer();
+function setupInputHandlers(display) {
+    const canvas = display.el;
     const instructions = document.getElementById('focus-instructions');
     canvas.setAttribute('tabindex', "1");
     canvas.addEventListener('keydown', handleKeyDown);
