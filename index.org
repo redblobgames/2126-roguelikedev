@@ -12,7 +12,7 @@ I don't expect that the org file itself will be useful to you, as it uses featur
 
 #+end_comment
 
-Each summer r/roguelikedev has a [[https://old.reddit.com/r/roguelikedev/wiki/python_tutorial_series][summer event]] in which we all make a simple roguelike, roughly following the libtcod roguelike tutorial. I've tried several times and [[href:/x/2025-roguelike-dev/][actually finished in 2020]], using [[https://ondras.github.io/rot.js/hp/][rot.js]] and Javascript. Last year, to keep the scope down, I told myself to implement only the topics from the tutorial, but make a list of things I might want to change.
+Each summer r/roguelikedev has a [[https://old.reddit.com/r/roguelikedev/wiki/python_tutorial_series][summer event]] in which we all make a simple roguelike, roughly following the libtcod roguelike tutorial. I've tried several times and [[href:/x/2025-roguelike-dev/][actually finished in 2020]], using [[https://ondras.github.io/rot.js/hp/][rot.js]] and Javascript. Last year, to keep the scope down, I told myself to implement only the topics from the tutorial, but make a list of things I might want to change. Since I started with last year's code, it's already playable:
 
 #+include: "game.html" export html
 
@@ -55,7 +55,7 @@ The first change  is to /keep/ the ASCII but render to SVG instead of rot.js. He
 
 [[./screenshots/ch1-svg.png]]
 
-The main difference is that the new renderer has /square tiles/. I'm planning to use square sprites so this is the size I will want. It looks funny right now with ASCII characters. In last year's tutorial I made the map size 60⨉25. This makes sense for a terminal with tall characters, but with square tiles I might want to change it to something like 40⨉40. That's something to look at later.
+The main difference is that the new renderer has /square tiles/. I'm planning to use square sprites so this is the size I will want. It looks funny right now with ASCII characters. In last year's tutorial I made the map size 60⨉25. This makes sense for a terminal with tall characters, but I expect a different size will work best for square tiles.
 
 ** Sprites
 :PROPERTIES:
@@ -71,9 +71,7 @@ It turned out to be /incredibly easy/ to implement:
 
 [[./screenshots/ch1-svg-sprites.png]]
 
-But it's too hard to read now! That's one of the advantages of ASCII: our brains have a lot of practice recognizing letters, but not a lot of practice recognizing this project's new shapes. I'm going to make the tile sizes larger to compensate for this.
-
-I kept the colors from the ASCII output but will want to adjust some of these colors to better fit the sprites.
+But it's too hard to read now! That's one of the advantages of ASCII: our brains have a lot of practice recognizing letters, but not a lot of practice recognizing this project's new shapes.
 
 #+begin_comment
 ../2125-svg-symbols/icon-to-svg-symbols.py cowled stairs troll orc-head carrion health-potion scroll-unfurled plain-dagger broadsword towel shield >_symbol-table.html
@@ -81,7 +79,19 @@ I kept the colors from the ASCII output but will want to adjust some of these co
 
 #+include: "_symbol-table.html" export html
 
+** Readability
+:PROPERTIES:
+:CUSTOM_ID: display-sprites-readability
+:END:
 
+The map used to be 60⨉25 = 1500 tiles with tall narrow character tiles. The SVG map uses square tiles, so they were half the size of the old tiles. In addition, the vector art has more detail than the ASCII characters. To improve the readability I'm going to:
+
+1. make the tile sizes 20% larger (by decreasing the map size to 40⨉30 = 1200 tiles)
+2. increase the foreground/background contrast (by not using yellow/blue for fov, and changing icon colors)
+
+[[./screenshots/ch1-svg-colors.png]]
+
+I think the sprites are more readable here than in the previous screenshot.
 
 #+begin_export html
 <x:footer>

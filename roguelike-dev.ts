@@ -15,7 +15,7 @@ import { RNG, FOV, Map as ROT_Map, Util } from "./third-party/rotjs_lib/";
 
 let DEBUG_ALL_EXPLORED = false;
 
-const WIDTH = 60, HEIGHT = 25;
+const WIDTH = 40, HEIGHT = 30;
 const STORAGE_KEY = window.location.pathname + '-savegame';
 RNG.setSeed(127);
 
@@ -132,12 +132,12 @@ const [setOverlayMessage, setTemporaryOverlayMessage] = (() => {
 const ENTITY_PROPERTIES = {
     player: { blocks: true, render_order: 5, visuals: ['cowled', "hsl(60, 100%, 70%)"], },
     stairs: { stairs: true, render_order: 1, visuals: ['stairs', "hsl(200, 100%, 90%)"], visible_in_shadow: true, },
-    troll:  { blocks: true, render_order: 3, visuals: ['troll', "hsl(120, 60%, 30%)"], xp_award: 100, },
-    orc:    { blocks: true, render_order: 3, visuals: ['orc-head', "hsl(100, 30%, 40%)"], xp_award: 35, },
+    troll:  { blocks: true, render_order: 3, visuals: ['troll', "hsl(120, 60%, 60%)"], xp_award: 100, },
+    orc:    { blocks: true, render_order: 3, visuals: ['orc-head', "hsl(100, 50%, 60%)"], xp_award: 35, },
     corpse: { blocks: false, render_order: 0, visuals: ['carrion', "darkred"], },
-    'healing potion': { item: true, render_order: 2, visuals: ['health-potion', "violet"], },
+    'healing potion': { item: true, render_order: 2, visuals: ['health-potion', "hsl(330, 50%, 75%)"], },
     'lightning scroll': { item: true, render_order: 2, visuals: ['scroll-unfurled', "hsl(60, 50%, 75%)"], },
-    'fireball scroll': { item: true, render_order: 2, visuals: ['scroll-unfurled', "hsl(0, 50%, 50%)"], },
+    'fireball scroll': { item: true, render_order: 2, visuals: ['scroll-unfurled', "hsl(0, 50%, 60%)"], },
     'confusion scroll': { item: true, render_order: 2, visuals: ['scroll-unfurled', "hsl(0, 100%, 75%)"], },
     dagger: { item: true, equipment_slot: EQUIP_MAIN_HAND, render_order: 2, bonus_power: 0, visuals: ['plain-dagger', "hsl(200, 30%, 90%)"], },
     sword: { item: true, equipment_slot: EQUIP_MAIN_HAND, render_order: 2, bonus_power: 3, visuals: ['broadsword', "hsl(200, 30%, 90%)"], },
@@ -410,9 +410,9 @@ function computeGlyphMap(entitiesMap: Map<number, Entity>) {
     return glyphMap;
 }
 
-const mapColors = {
-    [false]: {[false]: "rgb(50, 50, 150)", [true]: "rgb(0, 0, 100)"},
-    [true]: {[false]: "rgb(200, 180, 50)", [true]: "rgb(130, 110, 50)"}
+const mapColors = {               /* floor                         wall */
+    /* shadow */ [false]: {[false]: "hsl(250, 10%, 20%)", [true]: "hsl(250, 5%, 40%)"},
+    /* lit up */ [true]:  {[false]: "hsl( 50,  5%, 20%)", [true]: "hsl( 50, 5%, 50%)"}
 };
 function draw() {
     let svgInnerHtml = ``;
