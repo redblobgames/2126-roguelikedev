@@ -1,4 +1,5 @@
 <figure id="game-container">
+  <svg id="newgame"/>
   <div id="status-bar"></div>
   <div id="health-bar"></div>
   <div id="health-text"></div>
@@ -37,6 +38,20 @@
         opacity: 1.0;
     }
 
+    svg#newgame {
+        /*
+        grid-area: game;
+        z-index: 1;
+        */
+        display: block;
+        background: #333;
+    }
+    svg#newgame text {
+        font-size: 1px;
+        transform: translate(0, -0.1px);
+        font-family: monospace, sans-serif;
+    }
+    
     .overlay {
         grid-area: game;
         z-index: 0;

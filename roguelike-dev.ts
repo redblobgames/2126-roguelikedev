@@ -44,6 +44,17 @@ const display = new Display({width: WIDTH, height: HEIGHT, fontSize: 16, fontFam
 display.getContainer().setAttribute('id', "game");
 document.querySelector("figure").appendChild(display.getContainer());
 
+const svgDisplay = {
+    el: document.querySelector("#newgame"),
+};
+svgDisplay.el.setAttribute('viewBox', `0 0 ${WIDTH} ${HEIGHT}`);
+
+function htmlEscape(rawString: string): string {
+    return rawString
+        .replace(/&/g, "&amp;").replace(/"/g, "&quot;")
+        .replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 const EQUIP_MAIN_HAND = 0;
 const EQUIP_OFF_HAND = 1;
 
@@ -399,7 +410,8 @@ const mapColors = {
 };
 function draw() {
     display.clear();
-
+    let svgInnerHtml = ``;
+    
     document.querySelector("#health-bar").style.width = `${Math.ceil(100*player.hp/player.effective_max_hp)}%`;
     document.querySelector("#health-text").textContent = ` HP: ${player.hp} / ${player.effective_max_hp}`;
 
@@ -421,9 +433,13 @@ function draw() {
                 bg = glyph[2] || bg;
             }
             display.draw(x, y, ch, fg, bg);
+            svgInnerHtml += `<rect x="${x}" y="${y}" fill="${bg}" width="1" height="1" />`;
+            svgInnerHtml += `<text x="${x+0.5}" y="${y+1}" text-anchor="middle" fill="${fg}">${htmlEscape(ch)}</text>`;
         }
     }
 
+    svgDisplay.el.innerHTML = svgInnerHtml;
+    
     updateInstructions();
 }
 

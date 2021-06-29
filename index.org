@@ -35,6 +35,23 @@ One thing I want to have is a way to convert to Javascript /preserving formattin
 
 I went through the code and put in some (not all) types. There are a few places where my code was a bit sloppy so I had to clean it up to make the types work. I expect to add more types over time.
 
+* Display
+:PROPERTIES:
+:CUSTOM_ID: display
+:END:
+
+This feels like a big change. I'm switching from ASCII to graphics. I wanted to break it up into smaller changes that I can think about, implement, and test. 
+
+** SVG
+
+The first change  is to /keep/ the ASCII but render to SVG instead of rot.js. Here's the old and new renderer:
+
+[[./screenshots/ch1-canvas.png]]
+
+[[./screenshots/ch1-svg.png]]
+
+The obvious difference is that the new renderer has /square tiles/. I'm planning to use square sprites so this is the size I will want. It just looks funny right now with ASCII characters. In last year's tutorial I made the map size 60⨉25. This makes sense for a terminal with tall characters, but with square tiles I might want to change it to something like 40⨉40. That's something to look at later.
+
 
 #+begin_export html
 <x:footer>
