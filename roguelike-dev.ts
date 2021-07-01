@@ -21,11 +21,13 @@ RNG.setSeed(127);
 
 
 type Point = {x: number, y: number};
+
 type Location =
-    Point
-    | {carried_by: number, slot: number} // allowed only if .item
-    | {equipped_by: number, slot: number}; // allowed only if .equipment == slot
-type Entity = {
+      Point                                // on map
+    | {carried_by: number, slot: number}   // allowed only if .item
+    | {equipped_by: number, slot: number}  // allowed only if .equipment == slot
+
+type EntityAt<LocationType> = {
     id: number,
     type: string,
     blocks?: boolean,
@@ -33,17 +35,19 @@ type Entity = {
     equipment_slot?: any,
     render_order?: number,
     visuals: any[],
-    location: Location,
+    location: LocationType,
     inventory: (number | null)[], // should only contain entities with .item
-    equipment: (number | null)[] // should only contain items with .equipment
+    equipment: (number | null)[] // should only contain items with .equipment_slot
     [key: string]: any,
 };
+type Entity = EntityAt<Location>;
+type EntityOnMap = EntityAt<Point>;
 
-
+function isOnMap(e: Entity): e is EntityOnMap { return (e.location as Point).x !== undefined; }
+                                                
 const display = {
-    el: document.querySelector("#game"),
-    eventToPosition(event) {
-        // Compatibility with ROT.js
+    el: document.querySelector("#game") as SVGSVGElement,
+    eventToPosition(event: MouseEvent) {         // Compatibility with ROT.js
         let point = this.el.createSVGPoint();
         point.x = event.clientX;
         point.y = event.clientY;
@@ -54,12 +58,6 @@ const display = {
     },
 };
 display.el.setAttribute('viewBox', `0 0 ${WIDTH} ${HEIGHT}`);
-
-function htmlEscape(rawString: string): string {
-    return rawString
-        .replace(/&/g, "&amp;").replace(/"/g, "&quot;")
-        .replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
 
 const EQUIP_MAIN_HAND = 0;
 const EQUIP_OFF_HAND = 1;
@@ -165,7 +163,7 @@ const entity_prototype = {
     get effective_power() { return this.base_power + this.increased_power; },
     get effective_defense() { return this.base_defense + this.increased_defense; },
 };
-for (let property: string of
+for (let property of
      new Set(Object.values(ENTITY_PROPERTIES).flatMap(p => Object.keys(p))).values()) {
     Object.defineProperty(entity_prototype, property,
                           {get() { return ENTITY_PROPERTIES[this.type][property]; }});
@@ -194,7 +192,7 @@ function distance(a: Point, b: Point): number {
 
 /** return all entities at (x, y) */
 function allEntitiesAt(x: number, y: number) {
-    return Array.from(entities.values()).filter(e => e.location.x === x && e.location.y === y);
+    return Array.from(entities.values()).filter(e => isOnMap(e) && e.location.x === x && e.location.y === y);
 }
 
 /** return an item at (x, y) or null if there isn't one */
@@ -219,8 +217,10 @@ function swapEquipment(entity, inventory_slot, equipment_slot) {
     
     let held = entities.get(heldId);
     let equipped = entities.get(equippedId);
+    if (!('carried_by' in held.location)) throw `invalid: inventory item not being held`;
     if (held.location.carried_by !== entity.id) throw `invalid: inventory item not held by entity`;
     if (held.location.slot !== inventory_slot) throw `invalid: inventory item not held in correct slot`;
+    if (!('equipped_by' in equipped.location)) throw `invalid: item not equipped`;
     if (equipped.location.equipped_by !== entity.id) throw `invalid: item not equipped by entity`;
     if (equipped.location.slot !== equipment_slot) throw `invalid: item not equipped in correct slot`;
     
@@ -239,15 +239,15 @@ function swapEquipment(entity, inventory_slot, equipment_slot) {
  *   {carried_by_by:id slot:int} in id's 'inventory' 
  *   {equipped_by:id slot:int} is a valid location but NOT allowed here
  */
-function moveEntityTo(entity, location: Location) {
-    if (entity.location.carried_by !== undefined) {
+function moveEntityTo(entity: Entity, location: Location) {
+    if ('carried_by' in entity.location) {
         let {carried_by, slot} = entity.location;
         let carrier = entities.get(carried_by);
         if (carrier.inventory[slot] !== entity.id) throw `invalid: inventory slot ${slot} contains ${carrier.inventory[slot]} but should contain ${entity.id}`;
         carrier.inventory[slot] = null;
     }
     entity.location = location;
-    if (entity.location.carried_by !== undefined) {
+    if ('carried_by' in entity.location) {
         let {carried_by, slot} = entity.location;
         let carrier = entities.get(carried_by);
         if (carrier.inventory === undefined) throw `invalid: moving to an entity without inventory`;
@@ -271,7 +271,7 @@ let player = (function() {
             inventory: createInventoryArray(26),
             equipment: createInventoryArray(26),
         }
-    );
+    ) as EntityOnMap;
 
     // Insert the initial equipment with the correct invariants
     function equip(slot, type) {
@@ -283,7 +283,7 @@ let player = (function() {
     return player;
 })();
 
-function populateRoom(room, dungeonLevel) {
+function populateRoom(room, dungeonLevel: number) {
     let maxMonstersPerRoom = evaluateStepFunction([[1, 2], [4, 3], [6, 5]], dungeonLevel),
         maxItemsPerRoom = evaluateStepFunction([[1, 1], [4, 2]], dungeonLevel);
 
@@ -346,7 +346,7 @@ function updateTileMapFov(tileMap) {
     );
 }
     
-function createTileMap(dungeonLevel) {
+function createTileMap(dungeonLevel: number) {
     let tileMap = {
         ...createMap(),
         dungeonLevel,
@@ -405,20 +405,20 @@ function computeGlyphMap(entitiesMap: Map<number, Entity>) {
     let entities = Array.from(entitiesMap.values());
     entities.sort((a, b) => a.render_order - b.render_order);
     entities
-        .filter(e => e.location.x !== undefined)
+        .filter<EntityOnMap>(isOnMap)
         .forEach(e => glyphMap.set(e.location.x, e.location.y, e.visuals));
     return glyphMap;
 }
 
 const mapColors = {               /* floor                         wall */
-    /* shadow */ [false]: {[false]: "hsl(250, 10%, 20%)", [true]: "hsl(250, 5%, 40%)"},
-    /* lit up */ [true]:  {[false]: "hsl( 50,  5%, 20%)", [true]: "hsl( 50, 5%, 50%)"}
+    /* shadow */ false: {false: "hsl(250, 10%, 20%)", true: "hsl(250, 5%, 40%)"},
+    /* lit up */ true:  {false: "hsl( 50,  5%, 20%)", true: "hsl( 50, 5%, 50%)"}
 };
 function draw() {
     let svgInnerHtml = ``;
     
-    document.querySelector("#health-bar").style.width = `${Math.ceil(100*player.hp/player.effective_max_hp)}%`;
-    document.querySelector("#health-text").textContent = ` HP: ${player.hp} / ${player.effective_max_hp}`;
+    document.querySelector<HTMLElement>("#health-bar").style.width = `${Math.ceil(100*player.hp/player.effective_max_hp)}%`;
+    document.querySelector<HTMLElement>("#health-text").textContent = ` HP: ${player.hp} / ${player.effective_max_hp}`;
 
     let lightMap = computeLightMap(player.location, tileMap);
     let glyphMap = computeGlyphMap(entities);
@@ -428,13 +428,13 @@ function draw() {
             let tile = tileMap.get(x, y);
             if (!tile || (!DEBUG_ALL_EXPLORED && !tile.explored)) { continue; }
             let lit = DEBUG_ALL_EXPLORED || lightMap.get(x, y) > 0.0;
-            let bg = mapColors[lit][tile.wall];
+            let bg = mapColors[lit.toString()][tile.wall];
             svgInnerHtml += `<rect x="${x}" y="${y}" width="1" height="1" fill="${bg}" stroke="${bg}" stroke-width="0.05"/>`;
             
             let glyph = glyphMap.get(x, y);
             if (glyph && (lit || tile.visible_in_shadow)) {
                 let [sprite, fg] = glyph;
-                svgInnerHtml += `<use x="${x}" y="${y}" width="1" height="1" href="#${sprite}" fill="${fg}" stroke="black" stroke-width="0.5"/>`;
+                svgInnerHtml += `<use style="transform:translate(${x}px,${y}px)" width="1" height="1" href="#${sprite}" fill="${fg}" stroke="black" stroke-width="0.5"/>`;
             }
         }
     }
@@ -481,12 +481,12 @@ function serializeGlobalState() {
 }
 
 function deserializeGlobalState(json) {
-    const reattachEntityPrototype = entry =>
+    const reattachEntityPrototype = (entry: any[]) =>
           [entry[0], Object.assign(Object.create(entity_prototype), entry[1])];
     const saved = JSON.parse(json);
     entities = new Map(saved.entities.map(reattachEntityPrototype));
     createEntity.id = saved.nextEntityId;
-    player = entities.get(saved.playerId);
+    player = entities.get(saved.playerId) as EntityOnMap;
     Object.assign(tileMap, saved.tileMap);
     updateTileMapFov(tileMap);
     messages = saved.messages;
@@ -497,7 +497,7 @@ function deserializeGlobalState(json) {
 //////////////////////////////////////////////////////////////////////
 // items
 
-function useItem(entity, item) {
+function useItem(entity: EntityOnMap, item: Entity) {
     switch (item.type) {
     case 'healing potion': {
         const healing = 40;
@@ -546,7 +546,7 @@ function useItem(entity, item) {
         break;
     }
     default: {
-        if (item.equipment_slot !== undefined) {
+        if ('equipment_slot' in item && 'slot' in item.location) {
             let oldItem = entities.get(player.equipment[item.equipment_slot]);
             swapEquipment(player, item.location.slot, item.equipment_slot);
             print(`You unquip ${oldItem.type} and equip ${item.type}.`, 'welcome');
@@ -572,7 +572,7 @@ function xpForLevel(level: number): number {
 }
 
 
-function gainXp(entity, amount: number) {
+function gainXp(entity: Entity, amount: number) {
     if (entity.xp === undefined) { return; } // this entity doesn't gain experience
     entity.xp += amount;
     if (entity.id !== player.id) { throw `XP for non-player not implemented`; }
@@ -588,7 +588,7 @@ function gainXp(entity, amount: number) {
 //////////////////////////////////////////////////////////////////////
 // combat
 
-function takeDamage(source, target, amount: number) {
+function takeDamage(source: Entity, target: Entity, amount: number) {
     target.hp -= amount;
     if (target.hp <= 0) {
         print(`${target.name} dies!`, target.id === player.id? 'player-die' : 'enemy-die');
@@ -600,7 +600,7 @@ function takeDamage(source, target, amount: number) {
     }
 }
 
-function attack(attacker, defender) {
+function attack(attacker: Entity, defender: Entity) {
     let damage = attacker.effective_power - defender.effective_defense;
     let color = attacker.id === player.id? 'player-attack' : 'enemy-attack';
     if (damage > 0) {
@@ -612,7 +612,7 @@ function attack(attacker, defender) {
 }
 
 /** return true if the item was used */
-function castFireball(caster, x: number, y: number) {
+function castFireball(caster: EntityOnMap, x: number, y: number) {
     const maximum_range = 3;
     const damage = 25;
     let visibleToCaster = computeLightMap(caster.location, tileMap);
@@ -623,8 +623,8 @@ function castFireball(caster, x: number, y: number) {
 
     let visibleFromFireball = computeLightMap({x, y}, tileMap);
     let attackables = Array.from(entities.values())
-        .filter(e => e.location.x !== undefined) // on the map
         .filter(e => e.hp !== undefined && !e.dead)
+        .filter<EntityOnMap>(isOnMap)
         .filter(e => visibleFromFireball.get(e.location.x, e.location.y) > 0)
         .filter(e => visibleToCaster.get(e.location.x, e.location.y) > 0)
         .filter(e => distance(e.location, {x, y}) <= maximum_range);
@@ -638,14 +638,13 @@ function castFireball(caster, x: number, y: number) {
 }
 
 /** return true if the item was used */
-function castConfusion(caster, x: number, y: number) {
+function castConfusion(caster: EntityOnMap, x: number, y: number) {
     let visibleToCaster = computeLightMap(caster.location, tileMap);
     if (!(visibleToCaster.get(x, y) > 0)) {
         print(`You cannot target a tile outside your field of view.`, 'warning');
         return false;
     }
 
-    let visibleFromFireball = computeLightMap({x, y}, tileMap);
     let target = blockingEntityAt(x, y);
     if (target && target.hp !== undefined && !target.dead && target.ai) {
         target.ai = {behavior: 'confused', turns: 10};
@@ -657,17 +656,18 @@ function castConfusion(caster, x: number, y: number) {
 }
 
 /** return true if the item was used */
-function castLighting(caster) {
+function castLighting(caster: EntityOnMap) {
     const maximum_range = 5;
     const damage = 40;
     let visibleToCaster = computeLightMap(caster.location, tileMap);
     let attackables = Array.from(entities.values())
         .filter(e => e.id !== caster.id)
-        .filter(e => e.location.x !== undefined) // on the map
         .filter(e => e.hp !== undefined && !e.dead)
+        .filter<EntityOnMap>(isOnMap)
         .filter(e => visibleToCaster.get(e.location.x, e.location.y) > 0)
         .filter(e => distance(e.location, caster.location) <= maximum_range);
-    attackables.sort((a, b) => distance(a.location, caster.location) - distance(b.location, caster.location));
+    attackables.sort((a, b) => distance(a.location, caster.location)
+                             - distance(b.location, caster.location));
     let target = attackables[0];
     if (!target) {
         print(`No enemy is close enough to strike.`, 'error');
@@ -722,9 +722,9 @@ function playerGoDownStairs() {
 
     // Remove anything that's on the map
     for (let entity of entities.values()) {
-        if (entity.id === player.id) { continue; } // player goes on
-        if (entity.location.x === undefined) { continue; } // inventory goes on
-        entities.delete(entity.id);
+        if (isOnMap(entity) && entity.id !== player.id) {
+            entities.delete(entity.id);
+        }
     }
 
     // Make a new map
@@ -743,59 +743,60 @@ function playerGoDownStairs() {
 
 function enemiesMove() {
     let lightMap = computeLightMap(player.location, tileMap);
-    for (let entity of entities.values()) {
-        if (!entity.dead && entity.location.x !== undefined && entity.ai) {
+    let entitiesOnMap = Array.from(entities.values()).filter<EntityOnMap>(isOnMap);
+    for (let entity of entitiesOnMap) {
+        if (!entity.dead && entity.ai) {
             switch (entity.ai.behavior) {
-            case 'move_to_player': {
-                if (!(lightMap.get(entity.location.x, entity.location.y) > 0.0)) {
-                    // The player can't see the monster, so the monster
-                    // can't see the player, so the monster doesn't move
-                    continue;
-                }
-
-                let dx = player.location.x - entity.location.x,
-                    dy = player.location.y - entity.location.y;
-
-                // Pick either vertical or horizontal movement randomly
-                let stepx = 0, stepy = 0;
-                if (randint(1, Math.abs(dx) + Math.abs(dy)) <= Math.abs(dx)) {
-                    stepx = dx / Math.abs(dx);
-                } else {
-                    stepy = dy / Math.abs(dy);
-                }
-                let x = entity.location.x + stepx,
-                    y = entity.location.y + stepy;
-                if (tileMap.get(x, y).walkable) {
-                    let target = blockingEntityAt(x, y);
-                    if (target && target.id === player.id) {
-                        attack(entity, player);
-                    } else if (target) {
-                        // another monster there; can't move
-                    } else {
-                        moveEntityTo(entity, {x, y});
+                case 'move_to_player': {
+                    if (!(lightMap.get(entity.location.x, entity.location.y) > 0.0)) {
+                        // The player can't see the monster, so the monster
+                        // can't see the player, so the monster doesn't move
+                        continue;
                     }
-                }
-                break;
-            }
-            case 'confused': {
-                if (--entity.ai.turns > 0) {
-                    let stepx = randint(-1, 1), stepy = randint(-1, 1);
+
+                    let dx = player.location.x - entity.location.x,
+                        dy = player.location.y - entity.location.y;
+
+                    // Pick either vertical or horizontal movement randomly
+                    let stepx = 0, stepy = 0;
+                    if (randint(1, Math.abs(dx) + Math.abs(dy)) <= Math.abs(dx)) {
+                        stepx = dx / Math.abs(dx);
+                    } else {
+                        stepy = dy / Math.abs(dy);
+                    }
                     let x = entity.location.x + stepx,
-                        y = entity.location.y + stepy;
+                    y = entity.location.y + stepy;
                     if (tileMap.get(x, y).walkable) {
-                        if (!blockingEntityAt(x, y)) {
+                        let target = blockingEntityAt(x, y);
+                        if (target && target.id === player.id) {
+                            attack(entity, player);
+                        } else if (target) {
+                            // another monster there; can't move
+                        } else {
                             moveEntityTo(entity, {x, y});
                         }
                     }
-                } else {
-                    entity.ai = {behavior: 'move_to_player'};
-                    print(`The ${entity.name} is no longer confused!`, 'enemy-attack');
+                    break;
                 }
-                break;
-            }
-            default: {
-                throw `unknown enemy ai: ${entity.ai}`;
-            }
+                case 'confused': {
+                    if (--entity.ai.turns > 0) {
+                        let stepx = randint(-1, 1), stepy = randint(-1, 1);
+                        let x = entity.location.x + stepx,
+                        y = entity.location.y + stepy;
+                        if (tileMap.get(x, y).walkable) {
+                            if (!blockingEntityAt(x, y)) {
+                                moveEntityTo(entity, {x, y});
+                            }
+                        }
+                    } else {
+                        entity.ai = {behavior: 'move_to_player'};
+                        print(`The ${entity.name} is no longer confused!`, 'enemy-attack');
+                    }
+                    break;
+                }
+                default: {
+                    throw `unknown enemy ai: ${entity.ai}`;
+                }
             }
         }
     }
@@ -804,21 +805,21 @@ function enemiesMove() {
 
 //////////////////////////////////////////////////////////////////////
 // ui
-type Action = string[];
+type Action = any[];
 
 function createTargetingOverlay() {
     const overlay = document.querySelector(`#targeting`);
     let visible = false;
-    let callback = (_x, _y) => { throw `set callback`; };
+    let callback = (_x: number, _y: number): void => { throw `set callback`; };
 
-    function onClick(event) {
+    function onClick(event: MouseEvent) {
         let [x, y] = display.eventToPosition(event);
         callback(x, y);
         // Ugh, the overlay is nice for capturing mouse events but
         // when you click, the game loses focus. Workaround:
         display.el.focus();
     }
-    function onMouseMove(event) {
+    function onMouseMove(event: MouseEvent) {
         let [x, y] = display.eventToPosition(event);
         // TODO: feedback
     }
@@ -828,7 +829,7 @@ function createTargetingOverlay() {
 
     return {
         get visible() { return visible; },
-        open(instructions, callback_) {
+        open(instructions: string, callback_: (x: number, y: number) => void) {
             visible = true;
             callback = callback_;
             overlay.classList.add('visible');
