@@ -22,8 +22,10 @@ RNG.setSeed(127);
 
 type Point = {x: number, y: number};
 
+const NOWHERE = {nowhere: true};
 type Location =
-      Point                                // on map
+      NOWHERE
+    | Point                                // on map
     | {carried_by: number, slot: number}   // allowed only if .item
     | {equipped_by: number, slot: number}  // allowed only if .equipment == slot
 
@@ -169,7 +171,6 @@ for (let property of
                           {get() { return ENTITY_PROPERTIES[this.type][property]; }});
 }
     
-const NOWHERE = {x: -1, y: -1}; // TODO: figure out a better location
 let entities = new Map<number, Entity>();
 function createEntity(type: string, location: Location, properties={}): Entity {
     let id = ++createEntity.id;
@@ -190,9 +191,14 @@ function distance(a: Point, b: Point): number {
     return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
+/** all entities on the map */
+function entitiesOnMap(): EntityOnMap[] {
+    return Array.from(entities.values()).filter<EntityOnMap>(isOnMap);
+}
+
 /** return all entities at (x, y) */
-function allEntitiesAt(x: number, y: number) {
-    return Array.from(entities.values()).filter(e => isOnMap(e) && e.location.x === x && e.location.y === y);
+function allEntitiesAt(x: number, y: number): EntityOnMap[] {
+    return entitiesOnMap().filter(e => e.location.x === x && e.location.y === y);
 }
 
 /** return an item at (x, y) or null if there isn't one */
@@ -271,7 +277,7 @@ let player = (function() {
             inventory: createInventoryArray(26),
             equipment: createInventoryArray(26),
         }
-    ) as EntityOnMap;
+    ) as EntityOnMap; // NOTE: I'm lying, as it's not actually this type yet until I move the player to the first room
 
     // Insert the initial equipment with the correct invariants
     function equip(slot, type) {
