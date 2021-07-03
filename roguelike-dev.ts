@@ -13,7 +13,7 @@ import { RNG, FOV, Map as ROT_Map, Util } from "./third-party/rotjs_lib/";
 // of recreating it for each overlay. Performance wasn't a high priority for me at the time
 // so I didn't implement that.
 
-let DEBUG_ALL_EXPLORED = false;
+let DEBUG_ALL_VISIBLE = false;
 
 const WIDTH = 40, HEIGHT = 30;
 const STORAGE_KEY = window.location.pathname + '-savegame';
@@ -402,18 +402,10 @@ function computeLightMap(center: Point, tileMap) {
             tileMap.get(x, y).explored = true;
         }
     });
+    if (DEBUG_ALL_VISIBLE) {
+        lightMap.get = (x, y) => 1.0;
+    }
     return lightMap;
-}
-
-/** compute a per-tile map of entity visuals */
-function computeGlyphMap(entitiesMap: Map<number, Entity>) {
-    let glyphMap = createMap();
-    let entities = Array.from(entitiesMap.values());
-    entities.sort((a, b) => a.render_order - b.render_order);
-    entities
-        .filter<EntityOnMap>(isOnMap)
-        .forEach(e => glyphMap.set(e.location.x, e.location.y, e.visuals));
-    return glyphMap;
 }
 
 const mapColors = {               /* floor                         wall */
@@ -427,26 +419,32 @@ function draw() {
     document.querySelector<HTMLElement>("#health-text").textContent = ` HP: ${player.hp} / ${player.effective_max_hp}`;
 
     let lightMap = computeLightMap(player.location, tileMap);
-    let glyphMap = computeGlyphMap(entities);
 
+    // Draw the map
     for (let y = 0; y < HEIGHT; y++) {
         for (let x = 0; x < WIDTH; x++) {
             let tile = tileMap.get(x, y);
-            if (!tile || (!DEBUG_ALL_EXPLORED && !tile.explored)) { continue; }
-            let lit = DEBUG_ALL_EXPLORED || lightMap.get(x, y) > 0.0;
-            let bg = mapColors[lit.toString()][tile.wall];
-            svgInnerHtml += `<rect x="${x}" y="${y}" width="1" height="1" fill="${bg}" stroke="${bg}" stroke-width="0.05"/>`;
-            
-            let glyph = glyphMap.get(x, y);
-            if (glyph && (lit || tile.visible_in_shadow)) {
-                let [sprite, fg] = glyph;
-                svgInnerHtml += `<use style="transform:translate(${x}px,${y}px)" width="1" height="1" href="#${sprite}" fill="${fg}" stroke="black" stroke-width="0.5"/>`;
+            let lit = lightMap.get(x, y) > 0.0;
+            if (tile && (lit || tile.explored)) {
+                let bg = mapColors[lit.toString()][tile.wall];
+                svgInnerHtml += `<rect x="${x}" y="${y}" width="1" height="1" fill="${bg}" stroke="${bg}" stroke-width="0.05"/>`;
             }
         }
     }
 
-    display.el.innerHTML = svgInnerHtml;
+    // Draw the entities on top of the map
+    let entitiesArray = Array.from(entitiesOnMap());
+    entitiesArray.sort((a, b) => a.render_order - b.render_order);
+    for (let entity of entitiesArray) {
+        let {x, y} = entity.location;
+        let tile = tileMap.get(x, y);
+        if (lightMap.get(x, y) > 0.0 || (tile.explored && entity.visible_in_shadow)) {
+            let [sprite, fg] = entity.visuals;
+            svgInnerHtml += `<use style="transform:translate(${x}px,${y}px)" width="1" height="1" href="#${sprite}" fill="${fg}" stroke="black" stroke-width="0.5"/>`;
+        }
+    }
     
+    display.el.innerHTML = svgInnerHtml;
     updateInstructions();
 }
 
@@ -1066,7 +1064,7 @@ function runAction(action: Action) {
         break;
     }
     case 'toggle-debug': {
-        DEBUG_ALL_EXPLORED = !DEBUG_ALL_EXPLORED;
+        DEBUG_ALL_VISIBLE = !DEBUG_ALL_VISIBLE;
         break;
     }
     default:
