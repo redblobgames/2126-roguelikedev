@@ -1,5 +1,13 @@
 <figure id="game-container">
-  <svg id="game" tabindex="1" />
+  <svg id="game" tabindex="1">
+    <g class="map" />
+    <g class="entities-0" />
+    <g class="entities-1" />
+    <g class="entities-2" />
+    <g class="entities-3" />
+    <g class="entities-4" />
+    <g class="entities-5" />
+  </svg>
   <div id="status-bar"></div>
   <div id="health-bar"></div>
   <div id="health-text"></div>
@@ -43,6 +51,21 @@
         font-size: 1px;
         transform: translate(0, -0.2px);
         font-family: monospace, sans-serif;
+    }
+
+    svg .entity {
+        transition: transform 0.1s ease-out;
+    }
+    svg .entity-bg {
+        fill: none;
+        stroke: black;
+        stroke-opacity: 0.5;
+        stroke-width: 50px;
+    }
+    svg .entity-fg {
+        stroke: black;
+        stroke-opacity: 0.5;
+        stroke-width: 10px;
     }
     
     .overlay {

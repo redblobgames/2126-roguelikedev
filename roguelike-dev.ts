@@ -128,21 +128,22 @@ const [setOverlayMessage, setTemporaryOverlayMessage] = (() => {
     visuals: [sprite name, color]
     item: true if can go into inventory
     equipment_slot: 0–25 if it can go into equipment, undefined otherwise
- */
+*/
+const NUM_LAYERS = 6;
 const ENTITY_PROPERTIES = {
-    player: { blocks: true, render_order: 5, visuals: ['cowled', "hsl(60, 100%, 70%)"], },
-    stairs: { stairs: true, render_order: 1, visuals: ['stairs', "hsl(200, 100%, 90%)"], visible_in_shadow: true, },
-    troll:  { blocks: true, render_order: 3, visuals: ['troll', "hsl(120, 60%, 60%)"], xp_award: 100, },
-    orc:    { blocks: true, render_order: 3, visuals: ['orc-head', "hsl(100, 50%, 60%)"], xp_award: 35, },
-    corpse: { blocks: false, render_order: 0, visuals: ['carrion', "darkred"], },
-    'healing potion': { item: true, render_order: 2, visuals: ['health-potion', "hsl(330, 50%, 75%)"], },
-    'lightning scroll': { item: true, render_order: 2, visuals: ['scroll-unfurled', "hsl(60, 50%, 75%)"], },
-    'fireball scroll': { item: true, render_order: 2, visuals: ['scroll-unfurled', "hsl(0, 50%, 60%)"], },
-    'confusion scroll': { item: true, render_order: 2, visuals: ['scroll-unfurled', "hsl(0, 100%, 75%)"], },
-    dagger: { item: true, equipment_slot: EQUIP_MAIN_HAND, render_order: 2, bonus_power: 0, visuals: ['plain-dagger', "hsl(200, 30%, 90%)"], },
-    sword: { item: true, equipment_slot: EQUIP_MAIN_HAND, render_order: 2, bonus_power: 3, visuals: ['broadsword', "hsl(200, 30%, 90%)"], },
-    towel: { item: true, equipment_slot: EQUIP_OFF_HAND, render_order: 2, bonus_defense: 0, visuals: ['towel', "hsl(40, 50%, 80%)"], },
-    shield: { item: true, equipment_slot: EQUIP_OFF_HAND, render_order: 2, bonus_defense: 1, visuals: ['shield', "hsl(40, 50%, 80%)"], },
+    player: { blocks: true, render_layer: 5, visuals: ['cowled', "hsl(60, 100%, 70%)"], },
+    stairs: { stairs: true, render_layer: 1, visuals: ['stairs', "hsl(200, 100%, 90%)"], visible_in_shadow: true, },
+    troll:  { blocks: true, render_layer: 3, visuals: ['troll', "hsl(120, 60%, 60%)"], xp_award: 100, },
+    orc:    { blocks: true, render_layer: 3, visuals: ['orc-head', "hsl(100, 50%, 60%)"], xp_award: 35, },
+    corpse: { blocks: false, render_layer: 0, visuals: ['carrion', "darkred"], },
+    'healing potion': { item: true, render_layer: 2, visuals: ['health-potion', "hsl(330, 50%, 75%)"], },
+    'lightning scroll': { item: true, render_layer: 2, visuals: ['scroll-unfurled', "hsl(60, 50%, 75%)"], },
+    'fireball scroll': { item: true, render_layer: 2, visuals: ['scroll-unfurled', "hsl(0, 50%, 60%)"], },
+    'confusion scroll': { item: true, render_layer: 2, visuals: ['scroll-unfurled', "hsl(0, 100%, 75%)"], },
+    dagger: { item: true, equipment_slot: EQUIP_MAIN_HAND, render_layer: 2, bonus_power: 0, visuals: ['plain-dagger', "hsl(200, 30%, 90%)"], },
+    sword: { item: true, equipment_slot: EQUIP_MAIN_HAND, render_layer: 2, bonus_power: 3, visuals: ['broadsword', "hsl(200, 30%, 90%)"], },
+    towel: { item: true, equipment_slot: EQUIP_OFF_HAND, render_layer: 2, bonus_defense: 0, visuals: ['towel', "hsl(40, 50%, 80%)"], },
+    shield: { item: true, equipment_slot: EQUIP_OFF_HAND, render_layer: 2, bonus_defense: 1, visuals: ['shield', "hsl(40, 50%, 80%)"], },
 };
 /* Always use the current value of 'type' to get the entity
     properties, so that we can change the object type later (e.g. to
@@ -409,18 +410,18 @@ function computeLightMap(center: Point, tileMap) {
 }
 
 const mapColors = {               /* floor                         wall */
-    /* shadow */ false: {false: "hsl(250, 10%, 20%)", true: "hsl(250, 5%, 40%)"},
+    /* shadow */ false: {false: "hsl(250, 10%, 25%)", true: "hsl(250, 5%, 40%)"},
     /* lit up */ true:  {false: "hsl( 50,  5%, 15%)", true: "hsl( 50, 5%, 50%)"}
 };
+let previouslyDrawnSprites = Array.from({length: NUM_LAYERS}, () => new Map<number, SVGElement>());
 function draw() {
-    let svgInnerHtml = ``;
-    
     document.querySelector<HTMLElement>("#health-bar").style.width = `${Math.ceil(100*player.hp/player.effective_max_hp)}%`;
     document.querySelector<HTMLElement>("#health-text").textContent = ` HP: ${player.hp} / ${player.effective_max_hp}`;
 
     let lightMap = computeLightMap(player.location, tileMap);
 
     // Draw the map
+    let svgInnerHtml = ``;
     for (let y = 0; y < HEIGHT; y++) {
         for (let x = 0; x < WIDTH; x++) {
             let tile = tileMap.get(x, y);
@@ -431,22 +432,51 @@ function draw() {
             }
         }
     }
+    display.el.querySelector(".map").innerHTML = svgInnerHtml;
 
-    // Draw the entities on top of the map
+    // Draw the entities on top of the map. This is a little tricky in
+    // SVG because there are two conflicting goals:
+    //    1. I want to use CSS transition, so I need to reuse the DOM nodes.
+    //    2. SVG draws in DOM order, so I need the DOM to be in my order.
+    // But the various ways to reorder DOM nodes lose the CSS transitions!
+    // So my solution is to not have a total order, but only have layers,
+    // and then have CSS transitions only work within a layer.
+    let spritesToDraw = Array.from({length: NUM_LAYERS}, () => new Map<number, SVGElement>());
     let entitiesArray = Array.from(entitiesOnMap());
-    entitiesArray.sort((a, b) => a.render_order - b.render_order);
     for (let entity of entitiesArray) {
         let {x, y} = entity.location;
         let tile = tileMap.get(x, y);
         if (lightMap.get(x, y) > 0.0 || (tile.explored && entity.visible_in_shadow)) {
+            let layer = entity.render_layer;
             let [sprite, fg] = entity.visuals;
-            // Draw it twice, once to make a wide outline to partially obscure anything else on the same tile
-            svgInnerHtml += `<use style="transform:translate(${x}px,${y}px)" width="1" height="1" href="#${sprite}" fill="none" stroke="black" stroke-opacity="0.5" stroke-width="50"/>`;
-            svgInnerHtml += `<use style="transform:translate(${x}px,${y}px)" width="1" height="1" href="#${sprite}" fill="${fg}" stroke="black" stroke-opacity="0.5" stroke-width="10"/>`;
+            // Draw it twice, once to make a wide outline to partially
+            // obscure anything else on the same tile
+            let node = previouslyDrawnSprites[layer].get(entity.id);
+            if (!node) { node = document.createElementNS("http://www.w3.org/2000/svg", 'g'); }
+            node.setAttribute('class', "entity");
+            node.innerHTML = `
+                <use class="entity-bg" width="1" height="1" href="#${sprite}"/>
+                <use class="entity-fg" width="1" height="1" href="#${sprite}" fill="${fg}"/>
+            `;
+            node.style.transform = `translate(${x}px,${y}px)`;
+            spritesToDraw[layer].set(entity.id, node);
         }
     }
+    for (let layer = 0; layer < NUM_LAYERS; layer++) {
+        let g = display.el.querySelector(`.entities-${layer}`);
+        for (let [id, node] of spritesToDraw[layer].entries()) {
+            if (!previouslyDrawnSprites[layer].has(id)) {
+                g.appendChild(node);
+            }
+        }
+        for (let [id, node] of previouslyDrawnSprites[layer].entries()) {
+            if (!spritesToDraw[layer].has(id)) {
+                g.removeChild(node);
+            }
+        }
+        previouslyDrawnSprites[layer] = spritesToDraw[layer];
+    }
     
-    display.el.innerHTML = svgInnerHtml;
     updateInstructions();
 }
 

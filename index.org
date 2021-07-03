@@ -106,9 +106,64 @@ To solve that problem, and also because I like outlines so much, I added outline
 
 [[./screenshots/ch1-outlines.png]]
 
-Drawing all the objects on a tile also fixed a bug I had from last year's project: if a monster is over the stairs, and you walk out of view, the stairs should be visible but are not.
+Drawing all the objects on a tile also fixed a bug I had from last year's project. I want stairs to be visible even if out of line of sight. They don't move, so if you've seen them, you should remember where they are. But the old code calculated the topmost ascii character to draw. If a monster is over the stairs, and you walk out of view, the stairs wouldn't be seen. The monster was the topmost tile, and it didn't get drawn because it was out of view, and the stairs were never checked. Drawing all the objects fixes that bug.
 
 I think it might be also useful to vary the /size/ of the sprites on a tile. The potions seem large compared to the monsters. I'll experiment with that later.
+
+** Transitions
+:PROPERTIES:
+:CUSTOM_ID: display-transitions
+:END:
+
+The browser supports simple transitions for "free" using the CSS =transition= property:
+
+#+begin_src css
+.entity {
+    transition: transform 0.1s ease-out;
+}
+#+end_src
+
+Whenever the =transform= property changes on an =.entity=, the browser will smoothly transition the transform value:
+
+#+begin_export html
+<figure>
+<svg viewBox="0 0 14 2">
+  <g style="transform:translate(0,0)">
+    <use href="#cowled" width="1" height="1" style="animation-duration: 8s; animation-name: example; animation-iteration-count: infinite; animation-timing-function: steps(1, start)"/>
+  </g>
+  <g style="transform:translate(3px,0)">
+    <use href="#cowled" width="1" height="1" style="animation-duration: 8s; animation-name: example; animation-iteration-count: infinite; animation-timing-function: linear"/>
+  </g>
+  <g style="transform:translate(6px,0)">
+    <use href="#cowled" width="1" height="1" style="animation-duration: 8s; animation-name: example; animation-iteration-count: infinite; animation-timing-function: ease"/>
+  </g>
+  <g style="transform:translate(9px,0)">
+    <use href="#cowled" width="1" height="1" style="animation-duration: 8s; animation-name: example; animation-iteration-count: infinite; animation-timing-function: ease-in" />
+  </g>
+  <g style="transform:translate(12px,0)">
+    <use href="#cowled" width="1" height="1" style="animation-duration: 8s; animation-name: example; animation-iteration-count: infinite; animation-timing-function: ease-out" />
+  </g>
+</svg>
+<style>
+  @keyframes example { 
+     0% { transform: translate(0px,0px); }
+    10% { transform: translate(0px,1px); }
+    25% { transform: translate(0px,1px); }
+    35% { transform: translate(1px,1px); }
+    50% { transform: translate(1px,1px); }
+    60% { transform: translate(1px,0px); }
+    75% { transform: translate(1px,0px); }
+    85% { transform: translate(0px,0px); }
+   100% { transform: translate(0px,0px); }
+  }
+</style>
+<figcaption>Transition effects: none, linear, ease, ease-in, ease-out</figcaption>
+</figure>
+#+end_export
+
+I chose =ease-out= and made the transition last 100 milliseconds. If you move faster than that, no problem, as the animation won't limit the playing speed.
+
+In practice it wasn't quite "free" because the transitions required that I /reuse/ the SVG DOM nodes instead of recreating them from scratch every frame. That added a little bit of logic, especially because I also can't reorder them. Instead of applying a total ordering, I split them up into layers 0 through 5, and then the transitions apply whenever the sprite stays in same animation layer. If I had used a rendering library like Preact, Vue, Svelte, React, etc., it would handle this for me.
 
 #+begin_export html
 <x:footer>
@@ -126,6 +181,6 @@ I think it might be also useful to vary the /size/ of the sprites on a tile. The
   </style>
 
   Created 25 Jun 2021; &#160;
-  <!-- hhmts start -->Last modified: 29 Jun 2021<!-- hhmts end -->
+  <!-- hhmts start -->Last modified: 03 Jul 2021<!-- hhmts end -->
 </x:footer>
 #+end_export
