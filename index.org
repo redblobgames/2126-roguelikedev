@@ -93,6 +93,23 @@ The map used to be 60⨉25 = 1500 tiles with tall narrow character tiles. The SV
 
 I think the sprites are more readable here than in the previous screenshot.
 
+** Multiple objects per tile
+:PROPERTIES:
+:CUSTOM_ID: display-multiple-objects-per-tile
+:END:
+
+I decided to draw multiple objects in a tile. This works but sometimes it looks messy:
+
+[[./screenshots/ch1-multiple-sprites.png]]
+
+To solve that problem, and also because I like outlines so much, I added outlines:
+
+[[./screenshots/ch1-outlines.png]]
+
+Drawing all the objects on a tile also fixed a bug I had from last year's project: if a monster is over the stairs, and you walk out of view, the stairs should be visible but are not.
+
+I think it might be also useful to vary the /size/ of the sprites on a tile. The potions seem large compared to the monsters. I'll experiment with that later.
+
 #+begin_export html
 <x:footer>
   <style>

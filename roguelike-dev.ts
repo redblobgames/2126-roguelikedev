@@ -39,7 +39,7 @@ type EntityAt<LocationType> = {
     visuals: any[],
     location: LocationType,
     inventory: (number | null)[], // should only contain entities with .item
-    equipment: (number | null)[] // should only contain items with .equipment_slot
+    equipment: (number | null)[], // should only contain items with .equipment_slot
     [key: string]: any,
 };
 type Entity = EntityAt<Location>;
@@ -204,14 +204,14 @@ function allEntitiesAt(x: number, y: number): EntityOnMap[] {
 /** return an item at (x, y) or null if there isn't one */
 function itemEntityAt(x: number, y: number) {
     let entities = allEntitiesAt(x, y).filter(e => e.item);
-    return entities[0] || null;
+    return entities[0] ?? null;
 }
 
 /** return a blocking entity at (x,y) or null if there isn't one */
 function blockingEntityAt(x: number, y: number) {
     let entities = allEntitiesAt(x, y).filter(e => e.blocks);
     if (entities.length > 1) throw `invalid: more than one blocking entity at ${x},${y}`;
-    return entities[0] || null;
+    return entities[0] ?? null;
 }
 
 /** swap an inventory item with an equipment slot */
@@ -331,13 +331,13 @@ function populateRoom(room, dungeonLevel: number) {
     }
 }
 
-function createMap() {
+function createMap<T>() {
     function key(x: number, y: number) { return `${x},${y}`; }
     return {
         _values: {},
         has(x: number, y: number): boolean { return this._values[key(x, y)] !== undefined; },
-        get(x: number, y: number): any { return this._values[key(x, y)]; },
-        set(x: number, y: number, value: any) { this._values[key(x, y)] = value; },
+        get(x: number, y: number): T { return this._values[key(x, y)]; },
+        set(x: number, y: number, value: T) { this._values[key(x, y)] = value; },
     };
 }
 
@@ -394,7 +394,7 @@ let tileMap = createTileMap(1);
 
 
 function computeLightMap(center: Point, tileMap) {
-    let lightMap = createMap(); // 0.0–1.0
+    let lightMap = createMap<number>(); // 0.0–1.0
     tileMap.fov.compute(center.x, center.y, 10, (x, y, r, visibility) => {
         lightMap.set(x, y, visibility);
         if (visibility > 0.0) {
@@ -410,7 +410,7 @@ function computeLightMap(center: Point, tileMap) {
 
 const mapColors = {               /* floor                         wall */
     /* shadow */ false: {false: "hsl(250, 10%, 20%)", true: "hsl(250, 5%, 40%)"},
-    /* lit up */ true:  {false: "hsl( 50,  5%, 20%)", true: "hsl( 50, 5%, 50%)"}
+    /* lit up */ true:  {false: "hsl( 50,  5%, 15%)", true: "hsl( 50, 5%, 50%)"}
 };
 function draw() {
     let svgInnerHtml = ``;
@@ -440,7 +440,9 @@ function draw() {
         let tile = tileMap.get(x, y);
         if (lightMap.get(x, y) > 0.0 || (tile.explored && entity.visible_in_shadow)) {
             let [sprite, fg] = entity.visuals;
-            svgInnerHtml += `<use style="transform:translate(${x}px,${y}px)" width="1" height="1" href="#${sprite}" fill="${fg}" stroke="black" stroke-width="0.5"/>`;
+            // Draw it twice, once to make a wide outline to partially obscure anything else on the same tile
+            svgInnerHtml += `<use style="transform:translate(${x}px,${y}px)" width="1" height="1" href="#${sprite}" fill="none" stroke="black" stroke-opacity="0.5" stroke-width="50"/>`;
+            svgInnerHtml += `<use style="transform:translate(${x}px,${y}px)" width="1" height="1" href="#${sprite}" fill="${fg}" stroke="black" stroke-opacity="0.5" stroke-width="10"/>`;
         }
     }
     
