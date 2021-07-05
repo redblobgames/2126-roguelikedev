@@ -16,6 +16,7 @@ import { RNG, FOV, Map as ROT_Map, Util } from "./third-party/rotjs_lib/";
 let DEBUG_ALL_VISIBLE = false;
 
 const WIDTH = 40, HEIGHT = 30;
+const VIEWWIDTH = 21, VIEWHEIGHT = 15;
 const STORAGE_KEY = window.location.pathname + '-savegame';
 RNG.setSeed(127);
 
@@ -53,13 +54,13 @@ const display = {
         let point = this.el.createSVGPoint();
         point.x = event.clientX;
         point.y = event.clientY;
-        let coords = point.matrixTransform(this.el.getScreenCTM().inverse());
+        let coords = point.matrixTransform(this.el.querySelector(".view").getScreenCTM().inverse());
         let x = Math.floor(coords.x), y = Math.floor(coords.y);
         if (0 <= x && x < WIDTH && 0 <= y && y < HEIGHT) { return [x, y]; }
         else { return [-1, -1]; }
     },
 };
-display.el.setAttribute('viewBox', `0 0 ${WIDTH} ${HEIGHT}`);
+display.el.setAttribute('viewBox', `0 0 ${VIEWWIDTH} ${VIEWHEIGHT}`);
 
 const EQUIP_MAIN_HAND = 0;
 const EQUIP_OFF_HAND = 1;
@@ -422,8 +423,11 @@ function draw() {
 
     // Draw the map
     let svgInnerHtml = ``;
-    for (let y = 0; y < HEIGHT; y++) {
-        for (let x = 0; x < WIDTH; x++) {
+    for (let y = Math.floor(player.location.y - VIEWHEIGHT/2);
+         y <= Math.ceil(player.location.y + VIEWHEIGHT/2); y++) {
+        for (let x = Math.floor(player.location.x - VIEWWIDTH/2);
+             x <= Math.ceil(player.location.x + VIEWWIDTH/2); x++) {
+            if (!tileMap.has(x, y)) { continue; }
             let tile = tileMap.get(x, y);
             let lit = lightMap.get(x, y) > 0.0;
             if (tile && (lit || tile.explored)) {
@@ -432,6 +436,7 @@ function draw() {
             }
         }
     }
+    display.el.querySelector<HTMLElement>(".view").style.transform = `translate(${-player.location.x-0.5+VIEWWIDTH/2}px, ${-player.location.y-0.5+VIEWHEIGHT/2}px)`;
     display.el.querySelector(".map").innerHTML = svgInnerHtml;
 
     // Draw the entities on top of the map. This is a little tricky in

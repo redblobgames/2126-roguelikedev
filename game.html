@@ -1,12 +1,14 @@
 <figure id="game-container">
   <svg id="game" tabindex="1">
-    <g class="map" />
-    <g class="entities-0" />
-    <g class="entities-1" />
-    <g class="entities-2" />
-    <g class="entities-3" />
-    <g class="entities-4" />
-    <g class="entities-5" />
+    <g class="view">
+      <g class="map" />
+      <g class="entities-0" />
+      <g class="entities-1" />
+      <g class="entities-2" />
+      <g class="entities-3" />
+      <g class="entities-4" />
+      <g class="entities-5" />
+    </g>
   </svg>
   <div id="status-bar"></div>
   <div id="health-bar"></div>
@@ -53,7 +55,7 @@
         font-family: monospace, sans-serif;
     }
 
-    svg .entity {
+    svg .entity, svg .view {
         transition: transform 0.1s ease-out;
     }
     svg .entity-bg {

@@ -165,6 +165,22 @@ I chose =ease-out= and made the transition last 100 milliseconds. If you move fa
 
 In practice it wasn't quite "free" because the transitions required that I /reuse/ the SVG DOM nodes instead of recreating them from scratch every frame. That added a little bit of logic, especially because I also can't reorder them. Instead of applying a total ordering, I split them up into layers 0 through 5, and then the transitions apply whenever the sprite stays in same animation layer. If I had used a rendering library like Preact, Vue, Svelte, React, etc., it would handle this for me.
 
+** Camera position
+:PROPERTIES:
+:CUSTOM_ID: camera-position
+:END:
+
+The /camera/ is the position in the map that represents the center of the screen. In the Python roguelike tutorial, the camera points at the center of the dungeon. When the player moves around, the map does not. The center of the dungeon is always in the same place. The player moves on screen.
+
+I wanted to point the camera at the /player/. This means the player will always be in the center of the screen. The dungeon map will move around.
+
+There are two parts to the implementation.
+
+1. Drawing: we need to /subtract/ the camera position and add the screen center when drawing. Change code that draws at =x, y= to instead draw at =x - camera.x + screen_width/2, y - camera.y + screen_height/2=. This is how we convert /world coordinates/ to /screen coordinates/.
+2. Mouse: we need to /add/ the camera position and subtract the screen center from the mouse position. This is how we convert /screen coordinates/ to /world coordinates/, and it's the inverse of what we do to convert world to screen.
+
+Since I'm using SVG, I handled the drawing by adding a ~<g transform=translate(…)>~ around all the contents. The mouse handling came for free, as SVG already has an inverse function called =getScreenCTM().inverse()=, and I was already using that, so it handled the new transform automatically.
+
 #+begin_export html
 <x:footer>
   <style>
@@ -181,6 +197,6 @@ In practice it wasn't quite "free" because the transitions required that I /reus
   </style>
 
   Created 25 Jun 2021; &#160;
-  <!-- hhmts start -->Last modified: 03 Jul 2021<!-- hhmts end -->
+  <!-- hhmts start -->Last modified: 08 Jul 2021<!-- hhmts end -->
 </x:footer>
 #+end_export
