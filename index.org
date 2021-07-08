@@ -181,6 +181,14 @@ There are two parts to the implementation.
 
 Since I'm using SVG, I handled the drawing by adding a ~<g transform=translate(…)>~ around all the contents. The mouse handling came for free, as SVG already has an inverse function called =getScreenCTM().inverse()=, and I was already using that, so it handled the new transform automatically.
 
+** Light levels
+:PROPERTIES:
+:CUSTOM_ID: display-light-levels
+:END:
+
+I tried varying the light level instead of having the two-level visible/shadow. I played with this a little bit but wasn't happy with the results. Part of the problem is that instead of using brightness, I use a yellow/blue tint for visible/shadow. Whereas in-between values for brightness work, in-between values like for color (like green) make no sense for this.
+
+[[./screenshots/ch1-lighting.png]]
 
 ** Perspective view
 :PROPERTIES:
