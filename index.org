@@ -181,6 +181,43 @@ There are two parts to the implementation.
 
 Since I'm using SVG, I handled the drawing by adding a ~<g transform=translate(…)>~ around all the contents. The mouse handling came for free, as SVG already has an inverse function called =getScreenCTM().inverse()=, and I was already using that, so it handled the new transform automatically.
 
+
+** Perspective view
+:PROPERTIES:
+:CUSTOM_ID: display-perspective
+:END:
+
+The next thing I want to do is make things close to the player larger than things far away. I set the sprite size:
+
+#+begin_src javascript
+let width =  1 - Math.abs(x-player.location.x)/50,
+    height = 1 - Math.abs(y-player.location.y)/50;
+#+end_src
+
+I also tried a logarithmic series and a geometric series to vary the sizes, but any of them can give a reasonable effect:
+
+[[./screenshots/ch1-camera-position.png]]
+
+The next step will be to adjust the /tile size/ also. This will create a "fish eye lens" effect. Will it be annoying? In many 3d games you can see detail on the close up monsters while seeing a large area in the distance. But in a top down 2d grid? HyperRogue solves this with hyperbolic geometry but I wanted to see how far I could get while keeping the grid lines straight.
+
+#+begin_export html
+<figure>
+  <details>
+    <summary>Perspective view</summary>
+    <img src="screenshots/ch1-perspective.png" alt="Screenshot" />
+  </details>
+  <details>
+    <summary>Video showing angle</summary>
+    <video controls="true" width="100%">
+      <source src="screenshots/ch1-perspective.mov" type="video/mp4" />
+      Sorry, your browser won't play this video.
+    </video>
+  </details>
+</figure>
+#+end_export
+
+I /did/ like that monsters down at the end of the corridor looked smaller, and they got larger as you walked towards them. Unfortunately the distortion is distracting at high perspective values, and it's just not worth it at low perspective values. In addition, CSS transitions no longer work so I'd have to implement transitions manually. It might be worth exploring this again in GL (where I can apply a hyperbolic view), but not in this SVG project.
+
 #+begin_export html
 <x:footer>
   <style>
