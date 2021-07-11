@@ -228,6 +228,13 @@ The next step will be to adjust the /tile size/ also. This will create a "fish e
 
 I /did/ like that monsters down at the end of the corridor looked smaller, and they got larger as you walked towards them. Unfortunately the distortion is distracting at high perspective values, and it's just not worth it at low perspective values. In addition, CSS transitions no longer work so I'd have to implement transitions manually. It might be worth exploring this again in GL (where I can apply a hyperbolic view), but not in this SVG project.
 
+* Map
+:PROPERTIES:
+:CUSTOM_ID: map
+:END:
+
+I'd like to try "thin walls". I've wanted to try thin walls for a long time, and this is my chance. I'll represent them the way I described in [[href:/grids/edges/][this article]]. This will mean I can't use ROT.js's dungeon generator, and have to write my own. I think this will take most of week 2. It will also mean I can't use ROT.js's field of view algorithm, and have to write my own, maybe starting with [[/articles/visibility/][this]]. I think this may take much of week 3.
+
 #+begin_export html
 <x:footer>
   <style>

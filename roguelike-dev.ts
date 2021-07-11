@@ -25,26 +25,50 @@ type Point = {x: number, y: number};
 
 const NOWHERE = {nowhere: true};
 type Location =
-      NOWHERE
-    | Point                                // on map
-    | {carried_by: number, slot: number}   // allowed only if .item
-    | {equipped_by: number, slot: number}  // allowed only if .equipment == slot
+      typeof NOWHERE
+    | Point                                 // on map
+    | {carried_by: number; slot: number;}   // allowed only if .item
+    | {equipped_by: number; slot: number;}  // allowed only if .equipment == slot
 
 type EntityAt<LocationType> = {
-    id: number,
-    type: string,
-    blocks?: boolean,
-    item?: boolean,
-    equipment_slot?: any,
-    render_order?: number,
-    visuals: any[],
-    location: LocationType,
-    inventory: (number | null)[], // should only contain entities with .item
-    equipment: (number | null)[], // should only contain items with .equipment_slot
-    [key: string]: any,
+    id: number;
+    type: string;
+    blocks?: boolean;
+    item?: boolean;
+    equipment_slot?: any;
+    render_order?: number;
+    visuals: any[];
+    location: LocationType;
+    inventory: (number | null)[]; // should only contain entities with .item
+    equipment: (number | null)[]; // should only contain items with .equipment_slot
+    [key: string]: any;
 };
 type Entity = EntityAt<Location>;
 type EntityOnMap = EntityAt<Point>;
+
+type TileData = {
+    walkable: boolean;
+    wall: boolean;
+    explored: boolean;
+};
+type TileMap<T> = {
+    _values: any;
+    has(x: number, y: number): boolean;
+    get(x: number, y: number): T;
+    set(x: number, y: number, value: T): void;
+};
+type WallSet = {
+    has(x: number, y: number, s: Side): boolean;
+    add(x: number, y: number, s: Side): void;
+    delete(x: number, y: number, s: Side): void;
+};
+type GameMap = {
+    dungeonLevel: number;
+    tiles: TileMap<TileData>;
+    walls: WallSet;
+    rooms: any[];
+    fov?: any; // NOTE: can't convince typescript to use FOV.PreciseShadowcasting
+};
 
 function isOnMap(e: Entity): e is EntityOnMap { return (e.location as Point).x !== undefined; }
                                                 
@@ -67,6 +91,11 @@ const EQUIP_OFF_HAND = 1;
 
 /** like python's randint */
 const randint = RNG.getUniformInt.bind(RNG);
+
+/** euclidean distance */
+function distance(a: Point, b: Point): number {
+    return Math.hypot(a.x - b.x, a.y - b.y);
+}
 
 /** step function: given a sorted table [[x, y], …] 
     and an input x1, return the y1 for the first x that is <x1 */
@@ -108,14 +137,14 @@ function print(message: string, className: string) {
 const [setOverlayMessage, setTemporaryOverlayMessage] = (() => {
     let area = document.querySelector("#message-overlay");
     let timeout = 0;
-    function set(text) {
+    function set(text: string) {
         clearTimeout(timeout);
         area.textContent = text;
         area.classList.toggle('visible', !!text);
     }
     return [
         set,
-        function(text) {
+        function(text: string) {
             set(text);
             timeout = setTimeout(() => { area.classList.remove('visible'); }, 1000);
         }
@@ -188,11 +217,6 @@ function createEntity(type: string, location: Location, properties={}): Entity {
 }
 createEntity.id = 0;
 
-/** euclidean distance */
-function distance(a: Point, b: Point): number {
-    return Math.hypot(a.x - b.x, a.y - b.y);
-}
-
 /** all entities on the map */
 function entitiesOnMap(): EntityOnMap[] {
     return Array.from(entities.values()).filter<EntityOnMap>(isOnMap);
@@ -217,7 +241,7 @@ function blockingEntityAt(x: number, y: number) {
 }
 
 /** swap an inventory item with an equipment slot */
-function swapEquipment(entity, inventory_slot, equipment_slot) {
+function swapEquipment(entity: Entity, inventory_slot: number, equipment_slot: number) {
     let heldId = entity.inventory[inventory_slot],
         equippedId = entity.equipment[equipment_slot];
     if (heldId === null) throw `invalid: swap equipment must be with non-empty inventory slot`;
@@ -282,7 +306,7 @@ let player = (function() {
     ) as EntityOnMap; // NOTE: I'm lying, as it's not actually this type yet until I move the player to the first room
 
     // Insert the initial equipment with the correct invariants
-    function equip(slot, type) {
+    function equip(slot: number, type: string) {
         let entity = createEntity(type, {equipped_by: player.id, slot: slot});
         player.equipment[slot] = entity.id;
     }
@@ -333,79 +357,89 @@ function populateRoom(room, dungeonLevel: number) {
     }
 }
 
-function createMap<T>() {
+function createTileMap<T>(): TileMap<T> {
     function key(x: number, y: number) { return `${x},${y}`; }
     return {
-        _values: {},
-        has(x: number, y: number): boolean { return this._values[key(x, y)] !== undefined; },
-        get(x: number, y: number): T { return this._values[key(x, y)]; },
+        _values: {}, // use object instead of Map so it can be saved to json
+        has(x: number, y: number): boolean  { return this._values[key(x, y)] !== undefined; },
+        get(x: number, y: number): T        { return this._values[key(x, y)]; },
         set(x: number, y: number, value: T) { this._values[key(x, y)] = value; },
     };
 }
 
-function updateTileMapFov(tileMap) {
-    // NOTE: this isn't great because I wanted tileMap to have only
+type Side = 'W' | 'N';
+function createWallSet() {
+    function key(x: number, y: number, s: Side) { return `${x},${y},${s}`; }
+    return {
+        _values: {},
+        has(x: number, y: number, s: Side): boolean { return this._values[key(x, y, s)] !== undefined; },
+        add(x: number, y: number, s: Side)          { this._values[key(x, y, s)] = true; },
+        delete(x: number, y: number, s: Side)       { delete this._values[key(x, y, s)]; },
+    };
+}
+        
+function updateTileMapFov(gameMap: GameMap) {
+    // NOTE: this isn't great because I wanted gameMap to have only
     // the map, and not derived data like this. The map should be in
     // the save file but this fov should not. It just happens to work
     // because ROT doesn't expose the fov data in a JSON compatible
     // way, but it's not a great design.
-    tileMap.fov = new FOV.PreciseShadowcasting(
-        (x, y) => tileMap.has(x, y) && tileMap.get(x, y).walkable
+    gameMap.fov = new FOV.PreciseShadowcasting(
+        (x, y) => gameMap.tiles.has(x, y) && gameMap.tiles.get(x, y).walkable
     );
 }
     
-function createTileMap(dungeonLevel: number) {
-    let tileMap = {
-        ...createMap(),
+function createGameMap(dungeonLevel: number): GameMap {
+    let gameMap = {
         dungeonLevel,
+        tiles: createTileMap<TileData>(),
+        walls: createWallSet(),
         rooms: [],
-        corridors: [],
     };
         
     const digger = new ROT_Map.Digger(WIDTH, HEIGHT);
     digger.create((x, y, contents) =>
-        tileMap.set(x, y, {
+        gameMap.tiles.set(x, y, {
             walkable: contents === 0,
             wall: contents === 1,
             explored: false,
         })
     );
-    tileMap.dungeonLevel = dungeonLevel;
-    tileMap.rooms = digger.getRooms();
-    tileMap.corridors = digger.getCorridors();
+    gameMap.dungeonLevel = dungeonLevel;
+    gameMap.rooms = digger.getRooms();
 
     // Put the player in the first room
-    let [playerX, playerY] = tileMap.rooms[0].getCenter();
+    let [playerX, playerY] = gameMap.rooms[0].getCenter();
     moveEntityTo(player, {x: playerX, y: playerY});
 
     // Put stairs in the last room
-    let [stairX, stairY] = tileMap.rooms[tileMap.rooms.length-1].getCenter();
+    let [stairX, stairY] = gameMap.rooms[gameMap.rooms.length-1].getCenter();
     createEntity('stairs', {x: stairX, y: stairY});
 
     // Put monster and items in all the rooms
-    for (let room of tileMap.rooms) {
+    for (let room of gameMap.rooms) {
         populateRoom(room, dungeonLevel);
     }
 
-    updateTileMapFov(tileMap);
-    return tileMap;
+    updateTileMapFov(gameMap);
+    return gameMap;
 }
 
-let tileMap = createTileMap(1);
+let gameMap = createGameMap(1);
 
 
 
-function computeLightMap(center: Point, tileMap) {
-    let lightMap = createMap<number>(); // 0.0–1.0
-    tileMap.fov.compute(center.x, center.y, 10, (x, y, r, visibility) => {
+function computeLightMap(center: Point, gameMap: GameMap) {
+    let lightMap = createTileMap<number>(); // 0.0–1.0
+    gameMap.fov.compute(center.x, center.y, 10, (x, y, _r, visibility) => {
         lightMap.set(x, y, visibility);
         if (visibility > 0.0) {
-            if (tileMap.has(x, y))
-            tileMap.get(x, y).explored = true;
+            if (gameMap.tiles.has(x, y))
+            gameMap.tiles.get(x, y).explored = true;
         }
     });
     if (DEBUG_ALL_VISIBLE) {
-        lightMap.get = (x, y) => 1.0;
+        lightMap.get = (_x, _y) => 1.0;
     }
     return lightMap;
 }
@@ -419,25 +453,35 @@ function draw() {
     document.querySelector<HTMLElement>("#health-bar").style.width = `${Math.ceil(100*player.hp/player.effective_max_hp)}%`;
     document.querySelector<HTMLElement>("#health-text").textContent = ` HP: ${player.hp} / ${player.effective_max_hp}`;
 
-    let lightMap = computeLightMap(player.location, tileMap);
+    let lightMap = computeLightMap(player.location, gameMap);
 
     // Draw the map
-    let svgInnerHtml = ``;
+    let svgTileHtml = ``;
+    let svgWallHtml = ``;
+    function explored(x: number, y: number) { return gameMap.tiles.has(x, y) && gameMap.tiles.get(x, y).explored; }
     for (let y = Math.floor(player.location.y - VIEWHEIGHT/2);
          y <= Math.ceil(player.location.y + VIEWHEIGHT/2); y++) {
         for (let x = Math.floor(player.location.x - VIEWWIDTH/2);
              x <= Math.ceil(player.location.x + VIEWWIDTH/2); x++) {
-            if (!tileMap.has(x, y)) { continue; }
-            let tile = tileMap.get(x, y);
-            let lit = lightMap.get(x, y) > 0.0;
+            if (!gameMap.tiles.has(x, y)) { continue; }
+            let tile = gameMap.tiles.get(x, y);
+            let lit = lightMap.get(x, y) > 0;
             if (tile && (lit || tile.explored)) {
                 let bg = mapColors[lit.toString()][tile.wall];
-                svgInnerHtml += `<rect x="${x}" y="${y}" width="1" height="1" fill="${bg}" stroke="${bg}" stroke-width="0.05"/>`;
+                svgTileHtml += `<rect x="${x}" y="${y}" width="1" height="1" fill="${bg}" stroke="${bg}" stroke-width="0.05"/>`;
+            }
+            if (gameMap.walls.has(x, y, 'W') && (tile.explored || explored(x-1, y))) {
+                let fg = Math.max(lightMap.get(x, y), lightMap.get(x-1, y)) > 0 ? "yellow" : "blue";
+                svgWallHtml += `<line x1="${x}" y1="${y}" x2="${x}" y2="${y+1}" fill="none" stroke="${fg}" stroke-width="0.1"/>`;
+            }
+            if (gameMap.walls.has(x, y, 'N') && (tile.explored || explored(x, y-1))) {
+                let fg = Math.max(lightMap.get(x, y), lightMap.get(x, y-1)) > 0 ? "yellow" : "blue";
+                svgWallHtml += `<line x1="${x}" y1="${y}" x2="${x+1}" y2="${y}" fill="none" stroke="${fg}" stroke-width="0.1"/>`;
             }
         }
     }
     display.el.querySelector<HTMLElement>(".view").style.transform = `translate(${-player.location.x-0.5+VIEWWIDTH/2}px, ${-player.location.y-0.5+VIEWHEIGHT/2}px)`;
-    display.el.querySelector(".map").innerHTML = svgInnerHtml;
+    display.el.querySelector(".map").innerHTML = svgTileHtml + svgWallHtml;
 
     // Draw the entities on top of the map. This is a little tricky in
     // SVG because there are two conflicting goals:
@@ -450,7 +494,7 @@ function draw() {
     let entitiesArray = Array.from(entitiesOnMap());
     for (let entity of entitiesArray) {
         let {x, y} = entity.location;
-        let tile = tileMap.get(x, y);
+        let tile = gameMap.tiles.get(x, y);
         if (lightMap.get(x, y) > 0.0 || (tile.explored && entity.visible_in_shadow)) {
             let layer = entity.render_layer;
             let [sprite, fg] = entity.visuals;
@@ -513,7 +557,7 @@ function serializeGlobalState() {
     const saved = {
         entities: Array.from(entities),
         playerId: player.id,
-        tileMap: tileMap,
+        gameMap: gameMap,
         messages: messages,
         nextEntityId: createEntity.id,
         rngState: RNG.getState(),
@@ -521,15 +565,15 @@ function serializeGlobalState() {
     return JSON.stringify(saved);
 }
 
-function deserializeGlobalState(json) {
+function deserializeGlobalState(json: string) {
     const reattachEntityPrototype = (entry: any[]) =>
           [entry[0], Object.assign(Object.create(entity_prototype), entry[1])];
     const saved = JSON.parse(json);
     entities = new Map(saved.entities.map(reattachEntityPrototype));
     createEntity.id = saved.nextEntityId;
     player = entities.get(saved.playerId) as EntityOnMap;
-    Object.assign(tileMap, saved.tileMap);
-    updateTileMapFov(tileMap);
+    Object.assign(gameMap, saved.gameMap);
+    updateTileMapFov(gameMap);
     messages = saved.messages;
     RNG.setState(saved.rngState);
 }
@@ -599,7 +643,8 @@ function useItem(entity: EntityOnMap, item: Entity) {
     }
 }
 
-function dropItem(entity, item) {
+function dropItem(entity: Entity, item: Entity) {
+    if (entity.id !== player.id) throw `Unimplemented: non-player dropping items`;
     moveEntityTo(item, player.location);
     print(`You dropped ${item.name} on the ground`, 'warning');
     enemiesMove();
@@ -656,13 +701,13 @@ function attack(attacker: Entity, defender: Entity) {
 function castFireball(caster: EntityOnMap, x: number, y: number) {
     const maximum_range = 3;
     const damage = 25;
-    let visibleToCaster = computeLightMap(caster.location, tileMap);
+    let visibleToCaster = computeLightMap(caster.location, gameMap);
     if (!(visibleToCaster.get(x, y) > 0)) {
         print(`You cannot target a tile outside your field of view.`, 'warning');
         return false;
     }
 
-    let visibleFromFireball = computeLightMap({x, y}, tileMap);
+    let visibleFromFireball = computeLightMap({x, y}, gameMap);
     let attackables = Array.from(entities.values())
         .filter(e => e.hp !== undefined && !e.dead)
         .filter<EntityOnMap>(isOnMap)
@@ -680,7 +725,7 @@ function castFireball(caster: EntityOnMap, x: number, y: number) {
 
 /** return true if the item was used */
 function castConfusion(caster: EntityOnMap, x: number, y: number) {
-    let visibleToCaster = computeLightMap(caster.location, tileMap);
+    let visibleToCaster = computeLightMap(caster.location, gameMap);
     if (!(visibleToCaster.get(x, y) > 0)) {
         print(`You cannot target a tile outside your field of view.`, 'warning');
         return false;
@@ -700,7 +745,7 @@ function castConfusion(caster: EntityOnMap, x: number, y: number) {
 function castLighting(caster: EntityOnMap) {
     const maximum_range = 5;
     const damage = 40;
-    let visibleToCaster = computeLightMap(caster.location, tileMap);
+    let visibleToCaster = computeLightMap(caster.location, gameMap);
     let attackables = Array.from(entities.values())
         .filter(e => e.id !== caster.id)
         .filter(e => e.hp !== undefined && !e.dead)
@@ -744,7 +789,7 @@ function playerPickupItem() {
 function playerMoveBy(dx: number, dy: number) {
     let x = player.location.x + dx,
         y = player.location.y + dy;
-    if (tileMap.get(x, y).walkable) {
+    if (gameMap.tiles.get(x, y).walkable) {
         let target = blockingEntityAt(x, y);
         if (target && target.id !== player.id) {
             attack(player, target);
@@ -769,7 +814,7 @@ function playerGoDownStairs() {
     }
 
     // Make a new map
-    tileMap = createTileMap(tileMap.dungeonLevel + 1);
+    gameMap = createGameMap(gameMap.dungeonLevel + 1);
 
     // Heal the player
     player.hp = Util.clamp(player.hp + Math.floor(player.effective_max_hp / 2),
@@ -783,7 +828,7 @@ function playerGoDownStairs() {
 // monster actions
 
 function enemiesMove() {
-    let lightMap = computeLightMap(player.location, tileMap);
+    let lightMap = computeLightMap(player.location, gameMap);
     let entitiesOnMap = Array.from(entities.values()).filter<EntityOnMap>(isOnMap);
     for (let entity of entitiesOnMap) {
         if (!entity.dead && entity.ai) {
@@ -807,7 +852,7 @@ function enemiesMove() {
                     }
                     let x = entity.location.x + stepx,
                     y = entity.location.y + stepy;
-                    if (tileMap.get(x, y).walkable) {
+                    if (gameMap.tiles.get(x, y).walkable) {
                         let target = blockingEntityAt(x, y);
                         if (target && target.id === player.id) {
                             attack(entity, player);
@@ -824,7 +869,7 @@ function enemiesMove() {
                         let stepx = randint(-1, 1), stepy = randint(-1, 1);
                         let x = entity.location.x + stepx,
                         y = entity.location.y + stepy;
-                        if (tileMap.get(x, y).walkable) {
+                        if (gameMap.tiles.get(x, y).walkable) {
                             if (!blockingEntityAt(x, y)) {
                                 moveEntityTo(entity, {x, y});
                             }
@@ -861,7 +906,7 @@ function createTargetingOverlay() {
         display.el.focus();
     }
     function onMouseMove(event: MouseEvent) {
-        let [x, y] = display.eventToPosition(event);
+        let [_x, _y] = display.eventToPosition(event);
         // TODO: feedback
     }
 
@@ -920,7 +965,6 @@ function createCharacterOverlay() {
 function createUpgradeOverlay() {
     const overlay = document.querySelector(`#upgrade`);
     let visible = false;
-    let callback = () => { throw `set callback`; };
 
     return {
         get visible() { return visible; },
@@ -1002,7 +1046,7 @@ function handlePlayerKeys(key: string): Action {
     return action || handlePlayerDeadKeys(key);
 }
 
-function handleUpgradeKeys(key): Action {
+function handleUpgradeKeys(key: string): Action {
     const actions = {
         a:  ['upgrade', 'hp'],
         b:  ['upgrade', 'str'],
@@ -1130,14 +1174,14 @@ function handleKeyDown(event: KeyboardEvent) {
 }
 
 function handleMousemove(event: MouseEvent) {
-    let lightMap = computeLightMap(player.location, tileMap);
+    let lightMap = computeLightMap(player.location, gameMap);
     let [x, y] = display.eventToPosition(event); // returns -1, -1 for out of bounds
     let entities = lightMap.get(x, y) > 0.0 ? allEntitiesAt(x, y) : [];
     let text = entities.map(e => e.name).join("\n");
     setOverlayMessage(text);
 }
 
-function handleMouseout(event: MouseEvent) {
+function handleMouseout(_event: MouseEvent) {
     setOverlayMessage("");
 }
 
