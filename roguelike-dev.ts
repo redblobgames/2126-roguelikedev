@@ -132,10 +132,10 @@ const [setOverlayMessage, setTemporaryOverlayMessage] = (() => {
 */
 const NUM_LAYERS = 6;
 const ENTITY_PROPERTIES = {
-    player: { blocks: true, render_layer: 5, visuals: ['cowled', "hsl(60, 100%, 70%)"], },
+    player: { blocks: true, render_layer: 5, visuals: ['character', "hsl(60, 100%, 70%)"], },
     stairs: { stairs: true, render_layer: 1, visuals: ['stairs', "hsl(200, 100%, 90%)"], visible_in_shadow: true, },
-    troll:  { blocks: true, render_layer: 3, visuals: ['troll', "hsl(120, 60%, 60%)"], xp_award: 100, },
-    orc:    { blocks: true, render_layer: 3, visuals: ['orc-head', "hsl(100, 50%, 60%)"], xp_award: 35, },
+    troll:  { blocks: true, render_layer: 3, visuals: ['minotaur', "hsl(120, 60%, 60%)"], xp_award: 100, },
+    orc:    { blocks: true, render_layer: 3, visuals: ['bully-minion', "hsl(100, 50%, 60%)"], xp_award: 35, },
     corpse: { blocks: false, render_layer: 0, visuals: ['carrion', "darkred"], },
     'healing potion': { item: true, render_layer: 2, visuals: ['health-potion', "hsl(330, 50%, 75%)"], },
     'lightning scroll': { item: true, render_layer: 2, visuals: ['scroll-unfurled', "hsl(60, 50%, 75%)"], },
@@ -884,7 +884,7 @@ function createTargetingOverlay() {
 }
 
 function createCharacterOverlay() {
-    const overlay = document.querySelector(`#character`);
+    const overlay = document.querySelector(`#overlay-character`);
     let visible = false;
 
     return {

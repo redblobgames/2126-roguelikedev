@@ -18,6 +18,8 @@ Each summer r/roguelikedev has a [[https://old.reddit.com/r/roguelikedev/wiki/py
 
 (Icons from [[https://game-icons.net][game-icons.net]], CC BY 3.0, see source of [[href:_symbol-table.html]] for list of sprites and their authors)
 
+#+TOC: headlines 2
+
 This year, instead of going through the tutorial again from scratch, I'm going to revisit each chapter and try doing things differently. High level goals: tile graphics, thin walls (requiring a new map generator and a new field of view implementation), [[https://simblob.blogspot.com/2019/10/verb-noun-vs-noun-verb.html][noun-verb user interface]], more interesting monster behavior, redesigned stat and combat system, new control scheme, a small amount of animation.
 
 Source code: [[href:game.html][game.html]] + [[href:roguelike-dev.ts][roguelike-dev.ts]] (build with esbuild) - and [[https://github.com/redblobgames/2126-roguelikedev][on github]].
@@ -74,7 +76,7 @@ It turned out to be /incredibly easy/ to implement:
 But it's too hard to read now! That's one of the advantages of ASCII: our brains have a lot of practice recognizing letters, but not a lot of practice recognizing this project's new shapes.
 
 #+begin_comment
-../2125-svg-symbols/icon-to-svg-symbols.py cowled stairs troll orc-head carrion health-potion scroll-unfurled plain-dagger broadsword towel shield >_symbol-table.html
+../2125-svg-symbols/icon-to-svg-symbols.py character stairs minotaur bully-minion carrion health-potion scroll-unfurled plain-dagger broadsword towel shield >_symbol-table.html
 #+end_comment
 
 #+include: "_symbol-table.html" export html
@@ -181,7 +183,7 @@ There are two parts to the implementation.
 
 Since I'm using SVG, I handled the drawing by adding a ~<g transform=translate(…)>~ around all the contents. The mouse handling came for free, as SVG already has an inverse function called =getScreenCTM().inverse()=, and I was already using that, so it handled the new transform automatically.
 
-** Light levels
+** Light levels - abandoned
 :PROPERTIES:
 :CUSTOM_ID: display-light-levels
 :END:
@@ -190,7 +192,7 @@ I tried varying the light level instead of having the two-level visible/shadow. 
 
 [[./screenshots/ch1-lighting.png]]
 
-** Perspective view
+** Perspective view - abandoned
 :PROPERTIES:
 :CUSTOM_ID: display-perspective
 :END:
@@ -239,9 +241,12 @@ I /did/ like that monsters down at the end of the corridor looked smaller, and t
         border: 2px solid #999;
         box-shadow: 0 1px 2px 2px rgba(0,0,0,0.2);
     }
+
+    summary::marker { color: red; }
+    details summary { cursor: pointer; }
   </style>
 
   Created 25 Jun 2021; &#160;
-  <!-- hhmts start -->Last modified: 08 Jul 2021<!-- hhmts end -->
+  <!-- hhmts start -->Last modified: 09 Jul 2021<!-- hhmts end -->
 </x:footer>
 #+end_export
