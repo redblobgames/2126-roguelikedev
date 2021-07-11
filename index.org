@@ -233,7 +233,23 @@ I /did/ like that monsters down at the end of the corridor looked smaller, and t
 :CUSTOM_ID: map
 :END:
 
-I'd like to try "thin walls". I've wanted to try thin walls for a long time, and this is my chance. I'll represent them the way I described in [[href:/grids/edges/][this article]]. This will mean I can't use ROT.js's dungeon generator, and have to write my own. I think this will take most of week 2. It will also mean I can't use ROT.js's field of view algorithm, and have to write my own, maybe starting with [[/articles/visibility/][this]]. I think this may take much of week 3.
+I'd like to try "thin walls". I've wanted to try thin walls for a long time, and this is my chance. I'll have to replace the existing thick-wall-based dungeon generator with a new algorithm that generates thin walls. I think this will take most of week 2. I'll also have to replace the thick-wall-based field of view algorithm, maybe starting with [[/articles/visibility/][this]]. I think that may take much of week 3.
+
+** Data structures
+:PROPERTIES:
+:CUSTOM_ID: map-data-structure
+:END:
+
+The first thing I had to implement was some way to /store/ the thin walls. I represented them the way I described in [[href:/grids/edges/][this article]]: ~1,1,N~ is the wall on the north side of tile =1,1=, and ~1,1,W~ is the wall on the west side of tile =1,1=. On the south side of =1,1= is tile ~1,2,N~; on the east side is ~2,1,W~.
+
+The game map data structure I used last year was kind of messy. I had started with a table mapping tile coordinates ~1,1~ to an object with various properties. But now I need a second table for edge coordinates like ~1,1,W~. I made a =GameMap= that contains both ~tiles~ for the tile lookup and ~walls~ for the wall lookup.
+
+I then implemented rendering for the thin walls. Drawing wall ~x,y,N~ means drawing a horizontal line from =x,y= to =x+1,y=. Drawing wall ~x,y,W~ means drawing a vertical line from =x,y= to =x,y+1=. To test this, I added thin walls around the existing thick walls:
+
+[[./screenshots/ch2-thin-walls.png]]
+
+It looks good, although there are some glitches with shadow vs lit areas. I think those glitches will go away once I get rid of thick walls.
+
 
 #+begin_export html
 <x:footer>

@@ -408,6 +408,15 @@ function createGameMap(dungeonLevel: number): GameMap {
     gameMap.dungeonLevel = dungeonLevel;
     gameMap.rooms = digger.getRooms();
 
+    // Add thin walls for testing
+    function isWall(x: number, y: number) { return !!(gameMap.tiles.get(x, y)?.wall); }
+    for (let x = 0; x < WIDTH; x++) {
+        for (let y = 0; y < HEIGHT; y++) {
+            if (isWall(x-1, y) != isWall(x, y)) gameMap.walls.add(x, y, 'W');
+            if (isWall(x, y-1) != isWall(x, y)) gameMap.walls.add(x, y, 'N');
+        }
+    }
+    
     // Put the player in the first room
     let [playerX, playerY] = gameMap.rooms[0].getCenter();
     moveEntityTo(player, {x: playerX, y: playerY});
@@ -471,12 +480,12 @@ function draw() {
                 svgTileHtml += `<rect x="${x}" y="${y}" width="1" height="1" fill="${bg}" stroke="${bg}" stroke-width="0.05"/>`;
             }
             if (gameMap.walls.has(x, y, 'W') && (tile.explored || explored(x-1, y))) {
-                let fg = Math.max(lightMap.get(x, y), lightMap.get(x-1, y)) > 0 ? "yellow" : "blue";
-                svgWallHtml += `<line x1="${x}" y1="${y}" x2="${x}" y2="${y+1}" fill="none" stroke="${fg}" stroke-width="0.1"/>`;
+                let fg = Math.max(lightMap.get(x, y), lightMap.get(x-1, y)) > 0 ? "hsl(50, 15%, 65%)" : "hsl(250, 25%, 30%)";
+                svgWallHtml += `<line x1="${x}" y1="${y}" x2="${x}" y2="${y+1}" fill="none" stroke="${fg}" stroke-width="0.1" stroke-linecap="round"/>`;
             }
             if (gameMap.walls.has(x, y, 'N') && (tile.explored || explored(x, y-1))) {
-                let fg = Math.max(lightMap.get(x, y), lightMap.get(x, y-1)) > 0 ? "yellow" : "blue";
-                svgWallHtml += `<line x1="${x}" y1="${y}" x2="${x+1}" y2="${y}" fill="none" stroke="${fg}" stroke-width="0.1"/>`;
+                let fg = Math.max(lightMap.get(x, y), lightMap.get(x, y-1)) > 0 ? "hsl(50, 15%, 65%)" : "hsl(250, 25%, 30%)";
+                svgWallHtml += `<line x1="${x}" y1="${y}" x2="${x+1}" y2="${y}" fill="none" stroke="${fg}" stroke-width="0.1" stroke-linecap="round"/>`;
             }
         }
     }
