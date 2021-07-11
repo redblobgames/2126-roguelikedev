@@ -388,7 +388,20 @@ function updateTileMapFov(gameMap: GameMap) {
         (x, y) => gameMap.tiles.has(x, y) && gameMap.tiles.get(x, y).walkable
     );
 }
-    
+
+function edgeBetween(a: Point, b: Point): undefined | {x: number, y: number, s: Side} {
+    if (a.x === b.x && a.y === b.y-1) { return {x: b.x, y: b.y, s: 'N'}; }
+    if (a.x === b.x && a.y === b.y+1) { return {x: a.x, y: a.y, s: 'N'}; }
+    if (a.x === b.x-1 && a.y === b.y) { return {x: b.x, y: b.y, s: 'W'}; }
+    if (a.x === b.x+1 && a.y === b.y) { return {x: a.x, y: a.y, s: 'W'}; }
+    return undefined;
+}
+
+function canMoveTo(entity: EntityOnMap, x: number, y: number): boolean {
+    let edge = edgeBetween(entity.location, {x, y});
+    return !gameMap.walls.has(edge.x, edge.y, edge.s);
+}
+
 function createGameMap(dungeonLevel: number): GameMap {
     let gameMap = {
         dungeonLevel,
@@ -798,7 +811,7 @@ function playerPickupItem() {
 function playerMoveBy(dx: number, dy: number) {
     let x = player.location.x + dx,
         y = player.location.y + dy;
-    if (gameMap.tiles.get(x, y).walkable) {
+    if (canMoveTo(player, x, y)) {
         let target = blockingEntityAt(x, y);
         if (target && target.id !== player.id) {
             attack(player, target);
@@ -861,7 +874,7 @@ function enemiesMove() {
                     }
                     let x = entity.location.x + stepx,
                     y = entity.location.y + stepy;
-                    if (gameMap.tiles.get(x, y).walkable) {
+                    if (canMoveTo(entity, x, y)) {
                         let target = blockingEntityAt(x, y);
                         if (target && target.id === player.id) {
                             attack(entity, player);
@@ -878,10 +891,8 @@ function enemiesMove() {
                         let stepx = randint(-1, 1), stepy = randint(-1, 1);
                         let x = entity.location.x + stepx,
                         y = entity.location.y + stepy;
-                        if (gameMap.tiles.get(x, y).walkable) {
-                            if (!blockingEntityAt(x, y)) {
-                                moveEntityTo(entity, {x, y});
-                            }
+                        if (canMoveTo(entity, x, y) && !blockingEntityAt(x, y)) {
+                            moveEntityTo(entity, {x, y});
                         }
                     } else {
                         entity.ai = {behavior: 'move_to_player'};
