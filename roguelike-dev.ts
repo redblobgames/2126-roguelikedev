@@ -7,14 +7,11 @@
  * <https://github.com/ondras/rot.js/blob/master/license.txt>
  */
 
-import { RNG, FOV, Map as ROT_Map, Util } from "./third-party/rotjs_lib/";
+import { RNG, Util } from "./third-party/rotjs_lib/";
 
-// TODO: A reader suggests creating a div once and modifying it for all overlays instead
-// of recreating it for each overlay. Performance wasn't a high priority for me at the time
-// so I didn't implement that.
+let DEBUG_ALL_VISIBLE = true; // TODO: fov is broken, need to rewrite it
 
-let DEBUG_ALL_VISIBLE = false;
-
+const NUM_ROOMS = 100;
 const WIDTH = 40, HEIGHT = 30;
 const VIEWWIDTH = 21, VIEWHEIGHT = 15;
 const STORAGE_KEY = window.location.pathname + '-savegame';
@@ -47,8 +44,8 @@ type Entity = EntityAt<Location>;
 type EntityOnMap = EntityAt<Point>;
 
 type TileData = {
+    roomId: number,
     walkable: boolean;
-    wall: boolean;
     explored: boolean;
 };
 type TileMap<T> = {
@@ -331,8 +328,7 @@ function populateRoom(room, dungeonLevel: number) {
     
     const numMonsters = randint(0, maxMonstersPerRoom);
     for (let i = 0; i < numMonsters; i++) {
-        let x = randint(room.getLeft(), room.getRight()),
-            y = randint(room.getTop(), room.getBottom());
+        let {x, y} = RNG.getItem(room.tiles);
         if (!blockingEntityAt(x, y)) {
             let type = RNG.getWeightedValue(monsterChances);
             createEntity(type, {x, y}, monsterProps[type]);
@@ -349,8 +345,7 @@ function populateRoom(room, dungeonLevel: number) {
     };
     const numItems = randint(0, maxItemsPerRoom);
     for (let i = 0; i < numItems; i++) {
-        let x = randint(room.getLeft(), room.getRight()),
-            y = randint(room.getTop(), room.getBottom());
+        let {x, y} = RNG.getItem(room.tiles);
         if (allEntitiesAt(x, y).length === 0) {
             createEntity(RNG.getWeightedValue(itemChances), {x, y});
         }
@@ -378,15 +373,8 @@ function createWallSet() {
     };
 }
         
-function updateTileMapFov(gameMap: GameMap) {
-    // NOTE: this isn't great because I wanted gameMap to have only
-    // the map, and not derived data like this. The map should be in
-    // the save file but this fov should not. It just happens to work
-    // because ROT doesn't expose the fov data in a JSON compatible
-    // way, but it's not a great design.
-    gameMap.fov = new FOV.PreciseShadowcasting(
-        (x, y) => gameMap.tiles.has(x, y) && gameMap.tiles.get(x, y).walkable
-    );
+function updateTileMapFov(_gameMap: GameMap) {
+    // TODO: need to implement this for thin walls
 }
 
 function edgeBetween(a: Point, b: Point): undefined | {x: number, y: number, s: Side} {
@@ -408,34 +396,90 @@ function createGameMap(dungeonLevel: number): GameMap {
         tiles: createTileMap<TileData>(),
         walls: createWallSet(),
         rooms: [],
+        doors: new Map<string, {tile1: Point, tile2: Point, open: boolean}>(),
     };
-        
-    const digger = new ROT_Map.Digger(WIDTH, HEIGHT);
-    digger.create((x, y, contents) =>
-        gameMap.tiles.set(x, y, {
-            walkable: contents === 0,
-            wall: contents === 1,
-            explored: false,
-        })
-    );
-    gameMap.dungeonLevel = dungeonLevel;
-    gameMap.rooms = digger.getRooms();
 
-    // Add thin walls for testing
-    function isWall(x: number, y: number) { return !!(gameMap.tiles.get(x, y)?.wall); }
-    for (let x = 0; x < WIDTH; x++) {
-        for (let y = 0; y < HEIGHT; y++) {
-            if (isWall(x-1, y) != isWall(x, y)) gameMap.walls.add(x, y, 'W');
-            if (isWall(x, y-1) != isWall(x, y)) gameMap.walls.add(x, y, 'N');
+    const seeds = Array.from({length: NUM_ROOMS}, () => ({
+        x: randint(0, WIDTH), y: randint(0, HEIGHT)
+    }));
+    const DIRS_8 = [[0, -1], [+1, 0], [0, +1], [-1, 0],
+                    [-1, -1], [+1, -1], [+1, +1], [-1, +1]];
+    gameMap.rooms = seeds.map(seed => ({center: seed, tiles: []}));
+
+    for (let roomId = 0; roomId < NUM_ROOMS; roomId++) {
+        let roomSize = randint(0, 100) < 10 ? {w: 10, h: 1}
+            : randint(0, 100) < 10 ? {w: 1, h: 10}
+            : roomId < NUM_ROOMS * 0.9 ? {w: randint(2, 8), h: randint(2, 8)}
+            : {w: 15, h: 15};
+        
+        let left   = Math.max(0, seeds[roomId].x - (roomSize.w >> 1)),
+            top    = Math.max(0, seeds[roomId].y - (roomSize.h >> 1)),
+            right  = Math.min(WIDTH-1, left + roomSize.w - 1),
+            bottom = Math.min(HEIGHT-1, top + roomSize.h - 1);
+
+        let start = seeds[roomId];
+        if (gameMap.tiles.has(start.x, start.y)) {
+            // This room was placed inside an existing room, so skip it. It will be allocated 0 tiles.
+            continue;
+        }
+        let queue = [start];
+        let queueIndex = 0;
+        gameMap.tiles.set(start.x, start.y, {roomId, walkable: true, explored: false});
+        while (queueIndex < queue.length) {
+            let current = queue[queueIndex++];
+            for (let neighbor of DIRS_8.map(([dx, dy]) => ({x: current.x + dx, y: current.y + dy}))) {
+                if (neighbor.x < left || neighbor.x > right || neighbor.y < top || neighbor.y > bottom) {
+                    continue; // out of bounds
+                }
+                if (!gameMap.tiles.has(neighbor.x, neighbor.y)) {
+                    gameMap.tiles.set(neighbor.x, neighbor.y, {roomId, walkable: true, explored: false});
+                    queue.push(neighbor);
+                }
+            }
+        }
+        gameMap.rooms[roomId].tiles = queue;
+    }
+
+    gameMap.rooms = gameMap.rooms.filter(room => room.tiles.length > 0); // remove rooms that failed to allocate
+    gameMap.dungeonLevel = dungeonLevel;
+
+    // Add thin walls between rooms. One thin wall between each pair of rooms will become a door.
+    let doorCandidates = new Map<string, {tile1: Point, tile2: Point, edge: {x, y, s}}[]>();
+    function addWallMaybe(x1: number, y1: number, x2: number, y2: number, edge: {x, y, s}) {
+        let room1 = roomAt(x1, y1), room2 = roomAt(x2, y2);
+        if (room1 !== room2) {
+            gameMap.walls.add(edge.x, edge.y, edge.s);
+            if (room1 !== null && room2 !== null) {
+                // Wish we had something like python's setdefault
+                let key = `${Math.min(room1, room2)},${Math.max(room1, room2)}`;
+                let edges = doorCandidates.has(key) ? doorCandidates.get(key) : [];
+                edges.push({tile1: {x: x1, y: y1}, tile2: {x: x2, y: y2}, edge});
+                doorCandidates.set(key, edges);
+            }
         }
     }
+    function roomAt(x: number, y: number) { return gameMap.tiles.get(x, y)?.roomId ?? null; }
+    for (let y = 0; y <= HEIGHT; y++) {
+        for (let x = 0; x <= WIDTH; x++) {
+            addWallMaybe(x-1, y, x, y, {x, y, s: 'W'});
+            addWallMaybe(x, y-1, x, y, {x, y, s: 'N'});
+        }
+    }
+
+    // Now add doors by removing walls
+    for (let doors of doorCandidates.values()) {
+        let {edge} = RNG.getItem(doors);
+        gameMap.walls.delete(edge.x, edge.y, edge.s);
+    }
+
+    // TODO: ensure all or most of the rooms are connected
     
     // Put the player in the first room
-    let [playerX, playerY] = gameMap.rooms[0].getCenter();
+    let {x: playerX, y: playerY} = gameMap.rooms[0].center;
     moveEntityTo(player, {x: playerX, y: playerY});
 
     // Put stairs in the last room
-    let [stairX, stairY] = gameMap.rooms[gameMap.rooms.length-1].getCenter();
+    let {x: stairX, y: stairY} = gameMap.rooms[gameMap.rooms.length-1].center;
     createEntity('stairs', {x: stairX, y: stairY});
 
     // Put monster and items in all the rooms
@@ -453,23 +497,13 @@ let gameMap = createGameMap(1);
 
 function computeLightMap(center: Point, gameMap: GameMap) {
     let lightMap = createTileMap<number>(); // 0.0–1.0
-    gameMap.fov.compute(center.x, center.y, 10, (x, y, _r, visibility) => {
-        lightMap.set(x, y, visibility);
-        if (visibility > 0.0) {
-            if (gameMap.tiles.has(x, y))
-            gameMap.tiles.get(x, y).explored = true;
-        }
-    });
+    // TODO: FOV with thin walls
     if (DEBUG_ALL_VISIBLE) {
         lightMap.get = (_x, _y) => 1.0;
     }
     return lightMap;
 }
 
-const mapColors = {               /* floor                         wall */
-    /* shadow */ false: {false: "hsl(250, 10%, 25%)", true: "hsl(250, 5%, 40%)"},
-    /* lit up */ true:  {false: "hsl( 50,  5%, 15%)", true: "hsl( 50, 5%, 50%)"}
-};
 let previouslyDrawnSprites = Array.from({length: NUM_LAYERS}, () => new Map<number, SVGElement>());
 function draw() {
     document.querySelector<HTMLElement>("#health-bar").style.width = `${Math.ceil(100*player.hp/player.effective_max_hp)}%`;
@@ -480,23 +514,23 @@ function draw() {
     // Draw the map
     let svgTileHtml = ``;
     let svgWallHtml = ``;
-    function explored(x: number, y: number) { return gameMap.tiles.has(x, y) && gameMap.tiles.get(x, y).explored; }
+    function explored(x: number, y: number) { return true; /* gameMap.tiles.has(x, y) && gameMap.tiles.get(x, y).explored; */ }
     for (let y = Math.floor(player.location.y - VIEWHEIGHT/2);
          y <= Math.ceil(player.location.y + VIEWHEIGHT/2); y++) {
         for (let x = Math.floor(player.location.x - VIEWWIDTH/2);
              x <= Math.ceil(player.location.x + VIEWWIDTH/2); x++) {
-            if (!gameMap.tiles.has(x, y)) { continue; }
-            let tile = gameMap.tiles.get(x, y);
             let lit = lightMap.get(x, y) > 0;
-            if (tile && (lit || tile.explored)) {
-                let bg = mapColors[lit.toString()][tile.wall];
+            if (lit || explored(x, y)) {
+                let bg = lit ? "hsl(50, 5%, 35%)" : "hsl(250, 10%, 25%)";
+                let hue = (gameMap.tiles.get(x, y)?.roomId ?? -1) / NUM_ROOMS * 360 | 0;
+                if (hue >= 0) bg = `hsl(${hue}, 20%, 45%)`;
                 svgTileHtml += `<rect x="${x}" y="${y}" width="1" height="1" fill="${bg}" stroke="${bg}" stroke-width="0.05"/>`;
             }
-            if (gameMap.walls.has(x, y, 'W') && (tile.explored || explored(x-1, y))) {
+            if (gameMap.walls.has(x, y, 'W') && (explored(x, y) || explored(x-1, y))) {
                 let fg = Math.max(lightMap.get(x, y), lightMap.get(x-1, y)) > 0 ? "hsl(50, 15%, 65%)" : "hsl(250, 25%, 30%)";
                 svgWallHtml += `<line x1="${x}" y1="${y}" x2="${x}" y2="${y+1}" fill="none" stroke="${fg}" stroke-width="0.1" stroke-linecap="round"/>`;
             }
-            if (gameMap.walls.has(x, y, 'N') && (tile.explored || explored(x, y-1))) {
+            if (gameMap.walls.has(x, y, 'N') && (explored(x, y) || explored(x, y-1))) {
                 let fg = Math.max(lightMap.get(x, y), lightMap.get(x, y-1)) > 0 ? "hsl(50, 15%, 65%)" : "hsl(250, 25%, 30%)";
                 svgWallHtml += `<line x1="${x}" y1="${y}" x2="${x+1}" y2="${y}" fill="none" stroke="${fg}" stroke-width="0.1" stroke-linecap="round"/>`;
             }
@@ -516,8 +550,8 @@ function draw() {
     let entitiesArray = Array.from(entitiesOnMap());
     for (let entity of entitiesArray) {
         let {x, y} = entity.location;
-        let tile = gameMap.tiles.get(x, y);
-        if (lightMap.get(x, y) > 0.0 || (tile.explored && entity.visible_in_shadow)) {
+        let explored = gameMap.tiles.get(x, y)?.explored;
+        if (lightMap.get(x, y) > 0.0 || (explored && entity.visible_in_shadow)) {
             let layer = entity.render_layer;
             let [sprite, fg] = entity.visuals;
             // Draw it twice, once to make a wide outline to partially

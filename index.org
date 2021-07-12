@@ -250,6 +250,89 @@ I then implemented rendering for the thin walls. Drawing wall ~x,y,N~ means draw
 
 It looks good, although there are some glitches with shadow vs lit areas. I think those glitches will go away once I get rid of thick walls.
 
+** Map generation teardown
+:PROPERTIES:
+:CUSTOM_ID: map-generation-teardown
+:END:
+
+I have previously tried making [[href:/x/2043-bfs-dungeons/][a dungeon generation algorithm based on breadth first search]] (flood fill), but never finished it. The idea is to pick a point, inflate it up to a preset limit to form a room, then pick another point, inflate it, and so on. I looked through the code I wrote then, and I think thin walls make this dungeon generator /easier/. The logic for building walls was tricky with thick walls, as I had to scan ahead to see whether a wall could fit. With thin walls, they /always/ fit.
+
+Every time I tried to write that algorithm, I had a mental block. I decided to take a smaller step. I ripped out the old map generator and put in a placeholder. I figured the placeholder would be a smaller step than the full generator:
+
+[[./screenshots/ch2-placeholder-mapgen.png]]
+
+I noticed here that there's a problem. The rooms get walls on the north and west side but not the east or south side. That seems like a bug with my edge logic, since I represent north and west sides differently from east and south sides. To narrow down the bug I reduced the map to a single room, and found the same problem. Good. I have a reproducible test case. It turned out to be the old FOV algorithm interfering with the drawing of walls, so I took out the old thick-wall FOV.
+
+[[./screenshots/ch2-regression.png]]
+
+Now is when it gets a bit demoralizing. I've had to take out the dungeon generator /and/ FOV, which also means I lose lighting / shadows. Removing the old map generator also broke some other things, like the monster generation. The original tutorial code assumes that rooms are rectangular:
+
+#+begin_src python
+for i in range(number_of_monsters):
+    x = random.randint(room.x1 + 1, room.x2 - 1)
+    y = random.randint(room.y1 + 1, room.y2 - 1)
+#+end_src
+
+Last year I was following the tutorial closely so I also had rectangular rooms. My new map generator does not make all rooms rectangular, so I changed it to keep a list of tiles per room, and then selected a tile randomly.
+
+Removing the old map generator and putting in a placeholder let me find all the places in the code that were making assumptions about how the map generator worked. It was also a reminder to myself that when I get stuck, I should break the problem down into smaller pieces so that I can make progress with smaller steps, /even if those intermediate steps will get thrown away later/.
+
+** Map generation rebuild
+:PROPERTIES:
+:CUSTOM_ID: map-generation-rebuild
+:END:
+
+Time to write the new map generator. Fortunately I had already figured out the logic  [[href:/x/2043-bfs-dungeons/][in a previous miniproject]]. It was for thick walls and I needed to adapt it for thin walls.
+
+1. Pick lots of starting points for room growth.
+2. Pick a random limit for each room's side.
+3. Use breadth first search to expand the room until it hits either the limit or another room.
+
+And … that's about it for rooms! In the previous project I had to handle lots of little cases where I want to expand the room but can't, so I need to leave space for a wall. In this project I didn't have any of those special cases. The core bfs loop is:
+
+#+begin_src js
+let start = seeds[roomId];
+if (gameMap.tiles.has(start.x, start.y)) {
+    // This room was placed inside an existing room, so skip it.
+    continue;
+}
+let queue = [start];
+let queueIndex = 0;
+gameMap.tiles.set(start.x, start.y, {roomId, walkable: true, explored: false});
+while (queueIndex < queue.length) {
+    let current = queue[queueIndex++];
+    let neighbors = DIRS_8.map(([dx, dy]) => ({x: current.x + dx, y: current.y + dy}));
+    for (let neighbor of neighbors) {
+        if (neighbor.x < left || neighbor.x > right 
+         || neighbor.y < top || neighbor.y > bottom) {
+            continue; // out of bounds
+        }
+        if (!gameMap.tiles.has(neighbor.x, neighbor.y)) {
+            gameMap.tiles.set(neighbor.x, neighbor.y,
+                              {roomId, walkable: true, explored: false});
+            queue.push(neighbor);
+        }
+    }
+}
+gameMap.rooms[roomId].tiles = queue;
+#+end_src
+
+It generates rooms like these:
+
+[[./screenshots/ch2-bfs-maps.png]]
+
+They're mostly rectangles but also some L-shaped and occasionally even more interestingly shaped rooms.
+
+Where do the walls go? I place a wall at /any/ edge between two tiles that are part of different rooms. That logic is much simpler than for thick walls. 
+
+The next step is to add doors. I started by making a list of all walls between each pair of rooms, e.g. a list of walls between room 3 and 5. Then I removed a /random/ wall from that list to leave a doorway:
+
+[[./screenshots/ch2-doorways.png]]
+
+I think there are too many doorways here. I'm taking /every/ pair of rooms  that touch and making a doorway between them. To do something smarter, I'm going to have to build a room graph and decide on connectivity. Maybe a minimum spanning tree? Special cases for corridors? Those are problems for another day.
+
+The new maps lead to a problem: there are too many enemies. This is because there are more rooms, the rooms are smaller, and the lack of FOV means that all enemies move towards the player.
+
 
 #+begin_export html
 <x:footer>
