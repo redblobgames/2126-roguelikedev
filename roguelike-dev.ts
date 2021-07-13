@@ -8,6 +8,8 @@
  */
 
 import { RNG, Util } from "./third-party/rotjs_lib/";
+import { EQUIP_MAIN_HAND, EQUIP_OFF_HAND, NUM_LAYERS, NOWHERE,
+         entities, Point, Location, Entity, EntityOnMap } from "./entity";
 
 let DEBUG_ALL_VISIBLE = true; // TODO: fov is broken, need to rewrite it
 
@@ -16,31 +18,6 @@ const WIDTH = 40, HEIGHT = 30;
 const VIEWWIDTH = 21, VIEWHEIGHT = 15;
 RNG.setSeed(127);
 
-
-type Point = {x: number, y: number};
-
-const NOWHERE = {nowhere: true};
-type Location =
-      typeof NOWHERE
-    | Point                                 // on map
-    | {carried_by: number; slot: number;}   // allowed only if .item
-    | {equipped_by: number; slot: number;}  // allowed only if .equipment == slot
-
-type EntityAt<LocationType> = {
-    id: number;
-    type: string;
-    blocks?: boolean;
-    item?: boolean;
-    equipment_slot?: any;
-    render_order?: number;
-    visuals: any[];
-    location: LocationType;
-    inventory: (number | null)[]; // should only contain entities with .item
-    equipment: (number | null)[]; // should only contain items with .equipment_slot
-    [key: string]: any;
-};
-type Entity = EntityAt<Location>;
-type EntityOnMap = EntityAt<Point>;
 
 type TileData = {
     roomId: number,
@@ -78,9 +55,6 @@ const display = {
     },
 };
 display.el.setAttribute('viewBox', `0 0 ${VIEWWIDTH} ${VIEWHEIGHT}`);
-
-const EQUIP_MAIN_HAND = 0;
-const EQUIP_OFF_HAND = 1;
 
 /** like python's randint */
 const randint = RNG.getUniformInt.bind(RNG);
@@ -147,97 +121,6 @@ const [setOverlayMessage, setTemporaryOverlayMessage] = (() => {
 //////////////////////////////////////////////////////////////////////
 // entities
 
-/** Entity properties that are shared among all the instances of the type.
-    visuals: [sprite name, color]
-    item: true if can go into inventory
-    equipment_slot: 0–25 if it can go into equipment, undefined otherwise
-*/
-const NUM_LAYERS = 6;
-const ENTITY_PROPERTIES = {
-    player: { blocks: true, render_layer: 5, visuals: ['character', "hsl(60, 100%, 70%)"], },
-    stairs: { stairs: true, render_layer: 1, visuals: ['stairs', "hsl(200, 100%, 90%)"], visible_in_shadow: true, },
-    troll:  { blocks: true, render_layer: 3, visuals: ['minotaur', "hsl(120, 60%, 60%)"], xp_award: 100, },
-    orc:    { blocks: true, render_layer: 3, visuals: ['bully-minion', "hsl(100, 50%, 60%)"], xp_award: 35, },
-    corpse: { blocks: false, render_layer: 0, visuals: ['carrion', "darkred"], },
-    'healing potion': { item: true, render_layer: 2, visuals: ['health-potion', "hsl(330, 50%, 75%)"], },
-    'lightning scroll': { item: true, render_layer: 2, visuals: ['scroll-unfurled', "hsl(60, 50%, 75%)"], },
-    'fireball scroll': { item: true, render_layer: 2, visuals: ['scroll-unfurled', "hsl(0, 50%, 60%)"], },
-    'confusion scroll': { item: true, render_layer: 2, visuals: ['scroll-unfurled', "hsl(0, 100%, 75%)"], },
-    dagger: { item: true, equipment_slot: EQUIP_MAIN_HAND, render_layer: 2, bonus_power: 0, visuals: ['plain-dagger', "hsl(200, 30%, 90%)"], },
-    sword: { item: true, equipment_slot: EQUIP_MAIN_HAND, render_layer: 2, bonus_power: 3, visuals: ['broadsword', "hsl(200, 30%, 90%)"], },
-    towel: { item: true, equipment_slot: EQUIP_OFF_HAND, render_layer: 2, bonus_defense: 0, visuals: ['towel', "hsl(40, 50%, 80%)"], },
-    shield: { item: true, equipment_slot: EQUIP_OFF_HAND, render_layer: 2, bonus_defense: 1, visuals: ['shield', "hsl(40, 50%, 80%)"], },
-};
-/* Always use the current value of 'type' to get the entity
-    properties, so that we can change the object type later (e.g. to
-    'corpse'). JS lets us forward these properties to a getter, and I
-    use the getter to get the corresponding value from
-    ENTITY_PROPERTIES. This loop looks weird but I kept having bugs
-    where I forgot to forward a property manually, so I wanted to
-    automate it. */
-function calculateEquipmentBonus(equipment, field) {
-    if (!equipment) return 0;
-    return equipment
-        .filter(id => id !== null)
-        .reduce((sum, id) => sum + (entities.get(id)[field] || 0), 0);
-}
-const entity_prototype = {
-    get increased_max_hp() { return calculateEquipmentBonus(this.equipment, 'bonus_max_hp'); },
-    get increased_power() { return calculateEquipmentBonus(this.equipment, 'bonus_power'); },
-    get increased_defense() { return calculateEquipmentBonus(this.equipment, 'bonus_defense'); },
-    get effective_max_hp() { return this.base_max_hp + this.increased_max_hp; },
-    get effective_power() { return this.base_power + this.increased_power; },
-    get effective_defense() { return this.base_defense + this.increased_defense; },
-};
-for (let property of
-     new Set(Object.values(ENTITY_PROPERTIES).flatMap(p => Object.keys(p))).values()) {
-    Object.defineProperty(entity_prototype, property,
-                          {get() { return ENTITY_PROPERTIES[this.type][property]; }});
-}
-
-class Entities extends Map<number, Entity> {
-    id = 0;
-}
-
-let entities = new Entities();
-
-function createEntity(type: string, location: Location, properties={}): Entity {
-    let id = ++entities.id;
-    let entity: Entity = Object.create(entity_prototype);
-    entity.name = type;
-    Object.assign(entity, { id, type, location: NOWHERE, ...properties });
-    moveEntityTo(entity, location);
-    if (entity.base_max_hp !== undefined && entity.hp === undefined) {
-        entity.hp = entity.base_max_hp;
-    }
-    entities.set(id, entity);
-    return entity;
-}
-
-/** all entities on the map */
-function entitiesOnMap(): EntityOnMap[] {
-    function isOnMap(e: Entity): e is EntityOnMap { return (e.location as Point).x !== undefined; }
-    return Array.from(entities.values()).filter<EntityOnMap>(isOnMap);
-}
-
-/** return all entities at (x, y) */
-function allEntitiesAt(x: number, y: number): EntityOnMap[] {
-    return entitiesOnMap().filter(e => e.location.x === x && e.location.y === y);
-}
-
-/** return an item at (x, y) or null if there isn't one */
-function itemEntityAt(x: number, y: number) {
-    let entities = allEntitiesAt(x, y).filter(e => e.item);
-    return entities[0] ?? null;
-}
-
-/** return a blocking entity at (x,y) or null if there isn't one */
-function blockingEntityAt(x: number, y: number) {
-    let entities = allEntitiesAt(x, y).filter(e => e.blocks);
-    if (entities.length > 1) throw `invalid: more than one blocking entity at ${x},${y}`;
-    return entities[0] ?? null;
-}
-
 /** swap an inventory item with an equipment slot */
 function swapEquipment(entity: Entity, inventory_slot: number, equipment_slot: number) {
     let heldId = entity.inventory[inventory_slot],
@@ -264,35 +147,13 @@ function swapEquipment(entity: Entity, inventory_slot: number, equipment_slot: n
     equipped.location = {carried_by: entity.id, slot: inventory_slot};
 }
 
-/** move an entity to a new location:
- *   {x:int y:int} on the map
- *   {carried_by_by:id slot:int} in id's 'inventory' 
- *   {equipped_by:id slot:int} is a valid location but NOT allowed here
- */
-function moveEntityTo(entity: Entity, location: Location) {
-    if ('carried_by' in entity.location) {
-        let {carried_by, slot} = entity.location;
-        let carrier = entities.get(carried_by);
-        if (carrier.inventory[slot] !== entity.id) throw `invalid: inventory slot ${slot} contains ${carrier.inventory[slot]} but should contain ${entity.id}`;
-        carrier.inventory[slot] = null;
-    }
-    entity.location = location;
-    if ('carried_by' in entity.location) {
-        let {carried_by, slot} = entity.location;
-        let carrier = entities.get(carried_by);
-        if (carrier.inventory === undefined) throw `invalid: moving to an entity without inventory`;
-        if (carrier.inventory[slot] !== null) throw `invalid: inventory already contains an item ${carrier.inventory[slot]} in slot ${slot}`;
-        carrier.inventory[slot] = entity.id;
-    }
-}
-
 /** inventory is represented as an array with (null | entity.id) */
 function createInventoryArray(capacity: number): any[] {
     return Array.from({length: capacity}, () => null);
 }
 
 let player = (function() {
-    let player = createEntity(
+    let player = entities.create(
         'player', NOWHERE,
         {
             base_max_hp: 100,
@@ -305,7 +166,7 @@ let player = (function() {
 
     // Insert the initial equipment with the correct invariants
     function equip(slot: number, type: string) {
-        let entity = createEntity(type, {equipped_by: player.id, slot: slot});
+        let entity = entities.create(type, {equipped_by: player.id, slot: slot});
         player.equipment[slot] = entity.id;
     }
     equip(EQUIP_MAIN_HAND, 'dagger');
@@ -330,9 +191,9 @@ function populateRoom(room, dungeonLevel: number) {
     const numMonsters = randint(0, maxMonstersPerRoom);
     for (let i = 0; i < numMonsters; i++) {
         let {x, y} = RNG.getItem(room.tiles);
-        if (!blockingEntityAt(x, y)) {
+        if (!entities.blockingEntityAt(x, y)) {
             let type = RNG.getWeightedValue(monsterChances);
-            createEntity(type, {x, y}, monsterProps[type]);
+            entities.create(type, {x, y}, monsterProps[type]);
         }
     }
 
@@ -347,8 +208,8 @@ function populateRoom(room, dungeonLevel: number) {
     const numItems = randint(0, maxItemsPerRoom);
     for (let i = 0; i < numItems; i++) {
         let {x, y} = RNG.getItem(room.tiles);
-        if (allEntitiesAt(x, y).length === 0) {
-            createEntity(RNG.getWeightedValue(itemChances), {x, y});
+        if (entities.allAt(x, y).length === 0) {
+            entities.create(RNG.getWeightedValue(itemChances), {x, y});
         }
     }
 }
@@ -477,11 +338,11 @@ function createGameMap(dungeonLevel: number): GameMap {
     
     // Put the player in the first room
     let {x: playerX, y: playerY} = gameMap.rooms[0].center;
-    moveEntityTo(player, {x: playerX, y: playerY});
+    entities.moveEntityTo(player, {x: playerX, y: playerY});
 
     // Put stairs in the last room
     let {x: stairX, y: stairY} = gameMap.rooms[gameMap.rooms.length-1].center;
-    createEntity('stairs', {x: stairX, y: stairY});
+    entities.create('stairs', {x: stairX, y: stairY});
 
     // Put monster and items in all the rooms
     for (let room of gameMap.rooms) {
@@ -496,7 +357,7 @@ let gameMap = createGameMap(1);
 
 
 
-function computeLightMap(center: Point, gameMap: GameMap) {
+function computeLightMap(_center: Point, _gameMap: GameMap) {
     let lightMap = createTileMap<number>(); // 0.0–1.0
     // TODO: FOV with thin walls
     if (DEBUG_ALL_VISIBLE) {
@@ -548,7 +409,7 @@ function draw() {
     // So my solution is to not have a total order, but only have layers,
     // and then have CSS transitions only work within a layer.
     let spritesToDraw = Array.from({length: NUM_LAYERS}, () => new Map<number, SVGElement>());
-    let entitiesArray = Array.from(entitiesOnMap());
+    let entitiesArray = Array.from(entities.onMap());
     for (let entity of entitiesArray) {
         let {x, y} = entity.location;
         let explored = gameMap.tiles.get(x, y)?.explored;
@@ -588,7 +449,7 @@ function draw() {
 
 function updateInstructions() {
     const instructions = document.getElementById('game-instructions');
-    let standingOn = allEntitiesAt(player.location.x, player.location.y);
+    let standingOn = entities.allAt(player.location.x, player.location.y);
     
     let html = ``;
     if (currentKeyHandler() === handlePlayerKeys) {
@@ -617,14 +478,14 @@ function useItem(entity: EntityOnMap, item: Entity) {
         } else {
             print(`Your wounds start to feel better!`, 'healing');
             entity.hp = Util.clamp(entity.hp + healing, 0, entity.effective_max_hp);
-            moveEntityTo(item, NOWHERE);
+            entities.moveEntityTo(item, NOWHERE);
             enemiesMove();
         }
         break;
     }
     case 'lightning scroll': {
         if (castLighting(entity)) {
-            moveEntityTo(item, NOWHERE);
+            entities.moveEntityTo(item, NOWHERE);
             enemiesMove();
             draw();
         }
@@ -635,7 +496,7 @@ function useItem(entity: EntityOnMap, item: Entity) {
             `Click a location to cast fireball, or <kbd>ESC</kbd> to cancel`,
             (x, y) => {
                 if (castFireball(entity, x, y)) {
-                    moveEntityTo(item, NOWHERE);
+                    entities.moveEntityTo(item, NOWHERE);
                     enemiesMove();
                 }
                 targetingOverlay.close();
@@ -648,7 +509,7 @@ function useItem(entity: EntityOnMap, item: Entity) {
             `Click on an enemy to confuse it, or <kbd>ESC</kbd> to cancel`,
             (x, y) => {
                 if (castConfusion(entity, x, y)) {
-                    moveEntityTo(item, NOWHERE);
+                    entities.moveEntityTo(item, NOWHERE);
                     enemiesMove();
                 }
                 targetingOverlay.close();
@@ -671,7 +532,7 @@ function useItem(entity: EntityOnMap, item: Entity) {
 
 function dropItem(entity: Entity, item: Entity) {
     if (entity.id !== player.id) throw `Unimplemented: non-player dropping items`;
-    moveEntityTo(item, player.location);
+    entities.moveEntityTo(item, player.location);
     print(`You dropped ${item.name} on the ground`, 'warning');
     enemiesMove();
 }
@@ -734,7 +595,7 @@ function castFireball(caster: EntityOnMap, x: number, y: number) {
     }
 
     let visibleFromFireball = computeLightMap({x, y}, gameMap);
-    let attackables = entitiesOnMap()
+    let attackables = entities.onMap()
         .filter(e => e.hp !== undefined && !e.dead)
         .filter(e => visibleFromFireball.get(e.location.x, e.location.y) > 0)
         .filter(e => visibleToCaster.get(e.location.x, e.location.y) > 0)
@@ -756,7 +617,7 @@ function castConfusion(caster: EntityOnMap, x: number, y: number) {
         return false;
     }
 
-    let target = blockingEntityAt(x, y);
+    let target = entities.blockingEntityAt(x, y);
     if (target && target.hp !== undefined && !target.dead && target.ai) {
         target.ai = {behavior: 'confused', turns: 10};
         print(`The eyes of the ${target.name} look vacant, as it starts to stumble around!`, 'enemy-die');
@@ -771,7 +632,7 @@ function castLighting(caster: EntityOnMap) {
     const maximum_range = 5;
     const damage = 40;
     let visibleToCaster = computeLightMap(caster.location, gameMap);
-    let attackables = entitiesOnMap()
+    let attackables = entities.onMap()
         .filter(e => e.id !== caster.id)
         .filter(e => e.hp !== undefined && !e.dead)
         .filter(e => visibleToCaster.get(e.location.x, e.location.y) > 0)
@@ -793,7 +654,7 @@ function castLighting(caster: EntityOnMap) {
 // player actions
 
 function playerPickupItem() {
-    let item = itemEntityAt(player.location.x, player.location.y);
+    let item = entities.itemAt(player.location.x, player.location.y);
     if (!item) {
         print(`There is nothing here to pick up.`, 'warning');
         return;
@@ -806,7 +667,7 @@ function playerPickupItem() {
     }
 
     print(`You pick up the ${item.name}!`, 'pick-up');
-    moveEntityTo(item, {carried_by: player.id, slot});
+    entities.moveEntityTo(item, {carried_by: player.id, slot});
     enemiesMove();
 }
 
@@ -814,24 +675,24 @@ function playerMoveBy(dx: number, dy: number) {
     let x = player.location.x + dx,
         y = player.location.y + dy;
     if (canMoveTo(player, x, y)) {
-        let target = blockingEntityAt(x, y);
+        let target = entities.blockingEntityAt(x, y);
         if (target && target.id !== player.id) {
             attack(player, target);
         } else {
-            moveEntityTo(player, {x, y});
+            entities.moveEntityTo(player, {x, y});
         }
         enemiesMove();
     }
 }
 
 function playerGoDownStairs() {
-    if (!allEntitiesAt(player.location.x, player.location.y).some(e => e.stairs)) {
+    if (!entities.allAt(player.location.x, player.location.y).some(e => e.stairs)) {
         print(`There are no stairs here.`, 'warning');
         return;
     }
 
     // Remove anything that's on the map
-    for (let entity of entitiesOnMap()) {
+    for (let entity of entities.onMap()) {
         if (entity.id !== player.id) {
             entities.delete(entity.id);
         }
@@ -853,7 +714,7 @@ function playerGoDownStairs() {
 
 function enemiesMove() {
     let lightMap = computeLightMap(player.location, gameMap);
-    for (let entity of entitiesOnMap()) {
+    for (let entity of entities.onMap()) {
         if (!entity.dead && entity.ai) {
             switch (entity.ai.behavior) {
                 case 'move_to_player': {
@@ -876,13 +737,13 @@ function enemiesMove() {
                     let x = entity.location.x + stepx,
                     y = entity.location.y + stepy;
                     if (canMoveTo(entity, x, y)) {
-                        let target = blockingEntityAt(x, y);
+                        let target = entities.blockingEntityAt(x, y);
                         if (target && target.id === player.id) {
                             attack(entity, player);
                         } else if (target) {
                             // another monster there; can't move
                         } else {
-                            moveEntityTo(entity, {x, y});
+                            entities.moveEntityTo(entity, {x, y});
                         }
                     }
                     break;
@@ -892,8 +753,8 @@ function enemiesMove() {
                         let stepx = randint(-1, 1), stepy = randint(-1, 1);
                         let x = entity.location.x + stepx,
                         y = entity.location.y + stepy;
-                        if (canMoveTo(entity, x, y) && !blockingEntityAt(x, y)) {
-                            moveEntityTo(entity, {x, y});
+                        if (canMoveTo(entity, x, y) && !entities.blockingEntityAt(x, y)) {
+                            entities.moveEntityTo(entity, {x, y});
                         }
                     } else {
                         entity.ai = {behavior: 'move_to_player'};
@@ -1177,7 +1038,7 @@ function handleKeyDown(event: KeyboardEvent) {
 function handleMousemove(event: MouseEvent) {
     let lightMap = computeLightMap(player.location, gameMap);
     let [x, y] = display.eventToPosition(event); // returns -1, -1 for out of bounds
-    let entitiesAtMouse = lightMap.get(x, y) > 0.0 ? allEntitiesAt(x, y) : [];
+    let entitiesAtMouse = lightMap.get(x, y) > 0.0 ? entities.allAt(x, y) : [];
     let text = entitiesAtMouse.map(e => e.name).join("\n");
     setOverlayMessage(text);
 }
