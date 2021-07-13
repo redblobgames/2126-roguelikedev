@@ -275,6 +275,8 @@ for i in range(number_of_monsters):
 
 Last year I was following the tutorial closely so I also had rectangular rooms. My new map generator does not make all rooms rectangular, so I changed it to keep a list of tiles per room, and then selected a tile randomly.
 
+I also ended up removing the save/load feature. Last year I had tried limiting the data structures to be JSON-compatible so that it would be easy to save and load, but I ended up complicating the code to support it. I decided it's not worth it for this year's project.
+
 Removing the old map generator and putting in a placeholder let me find all the places in the code that were making assumptions about how the map generator worked. It was also a reminder to myself that when I get stuck, I should break the problem down into smaller pieces so that I can make progress with smaller steps, /even if those intermediate steps will get thrown away later/.
 
 ** Map generation rebuild

@@ -14,7 +14,6 @@ let DEBUG_ALL_VISIBLE = true; // TODO: fov is broken, need to rewrite it
 const NUM_ROOMS = 100;
 const WIDTH = 40, HEIGHT = 30;
 const VIEWWIDTH = 21, VIEWHEIGHT = 15;
-const STORAGE_KEY = window.location.pathname + '-savegame';
 RNG.setSeed(127);
 
 
@@ -45,7 +44,6 @@ type EntityOnMap = EntityAt<Point>;
 
 type TileData = {
     roomId: number,
-    walkable: boolean;
     explored: boolean;
 };
 type TileMap<T> = {
@@ -67,8 +65,6 @@ type GameMap = {
     fov?: any; // NOTE: can't convince typescript to use FOV.PreciseShadowcasting
 };
 
-function isOnMap(e: Entity): e is EntityOnMap { return (e.location as Point).x !== undefined; }
-                                                
 const display = {
     el: document.querySelector("#game") as SVGSVGElement,
     eventToPosition(event: MouseEvent) {         // Compatibility with ROT.js
@@ -198,10 +194,15 @@ for (let property of
     Object.defineProperty(entity_prototype, property,
                           {get() { return ENTITY_PROPERTIES[this.type][property]; }});
 }
-    
-let entities = new Map<number, Entity>();
+
+class Entities extends Map<number, Entity> {
+    id = 0;
+}
+
+let entities = new Entities();
+
 function createEntity(type: string, location: Location, properties={}): Entity {
-    let id = ++createEntity.id;
+    let id = ++entities.id;
     let entity: Entity = Object.create(entity_prototype);
     entity.name = type;
     Object.assign(entity, { id, type, location: NOWHERE, ...properties });
@@ -212,10 +213,10 @@ function createEntity(type: string, location: Location, properties={}): Entity {
     entities.set(id, entity);
     return entity;
 }
-createEntity.id = 0;
 
 /** all entities on the map */
 function entitiesOnMap(): EntityOnMap[] {
+    function isOnMap(e: Entity): e is EntityOnMap { return (e.location as Point).x !== undefined; }
     return Array.from(entities.values()).filter<EntityOnMap>(isOnMap);
 }
 
@@ -424,7 +425,7 @@ function createGameMap(dungeonLevel: number): GameMap {
         }
         let queue = [start];
         let queueIndex = 0;
-        gameMap.tiles.set(start.x, start.y, {roomId, walkable: true, explored: false});
+        gameMap.tiles.set(start.x, start.y, {roomId, explored: false});
         while (queueIndex < queue.length) {
             let current = queue[queueIndex++];
             for (let neighbor of DIRS_8.map(([dx, dy]) => ({x: current.x + dx, y: current.y + dy}))) {
@@ -432,7 +433,7 @@ function createGameMap(dungeonLevel: number): GameMap {
                     continue; // out of bounds
                 }
                 if (!gameMap.tiles.has(neighbor.x, neighbor.y)) {
-                    gameMap.tiles.set(neighbor.x, neighbor.y, {roomId, walkable: true, explored: false});
+                    gameMap.tiles.set(neighbor.x, neighbor.y, {roomId, explored: false});
                     queue.push(neighbor);
                 }
             }
@@ -592,46 +593,15 @@ function updateInstructions() {
     let html = ``;
     if (currentKeyHandler() === handlePlayerKeys) {
         html = `Arrows move, <kbd>S</kbd>ave`;
-        let hasSavedGame = window.localStorage.getItem(STORAGE_KEY) !== null;
         let hasItems = player.inventory.filter(id => id !== null).length > 0;
         let onItem = standingOn.filter(e => e.item).length > 0;
         let onStairs = standingOn.filter(e => e.stairs).length > 0;
-        if (hasSavedGame) html += `/<kbd>R</kbd>estore`;
         html += ` game`;
         if (hasItems) html += `, <kbd>U</kbd>se, <kbd>D</kbd>rop`;
         if (onItem) html += `, <kbd>G</kbd>et item`;
         if (onStairs) html += `, <kbd>&gt;</kbd> stairs`;
     }
     instructions.innerHTML = html;
-}
-
-
-//////////////////////////////////////////////////////////////////////
-// saving and loading
-
-function serializeGlobalState() {
-    const saved = {
-        entities: Array.from(entities),
-        playerId: player.id,
-        gameMap: gameMap,
-        messages: messages,
-        nextEntityId: createEntity.id,
-        rngState: RNG.getState(),
-    };
-    return JSON.stringify(saved);
-}
-
-function deserializeGlobalState(json: string) {
-    const reattachEntityPrototype = (entry: any[]) =>
-          [entry[0], Object.assign(Object.create(entity_prototype), entry[1])];
-    const saved = JSON.parse(json);
-    entities = new Map(saved.entities.map(reattachEntityPrototype));
-    createEntity.id = saved.nextEntityId;
-    player = entities.get(saved.playerId) as EntityOnMap;
-    Object.assign(gameMap, saved.gameMap);
-    updateTileMapFov(gameMap);
-    messages = saved.messages;
-    RNG.setState(saved.rngState);
 }
 
 
@@ -764,9 +734,8 @@ function castFireball(caster: EntityOnMap, x: number, y: number) {
     }
 
     let visibleFromFireball = computeLightMap({x, y}, gameMap);
-    let attackables = Array.from(entities.values())
+    let attackables = entitiesOnMap()
         .filter(e => e.hp !== undefined && !e.dead)
-        .filter<EntityOnMap>(isOnMap)
         .filter(e => visibleFromFireball.get(e.location.x, e.location.y) > 0)
         .filter(e => visibleToCaster.get(e.location.x, e.location.y) > 0)
         .filter(e => distance(e.location, {x, y}) <= maximum_range);
@@ -802,10 +771,9 @@ function castLighting(caster: EntityOnMap) {
     const maximum_range = 5;
     const damage = 40;
     let visibleToCaster = computeLightMap(caster.location, gameMap);
-    let attackables = Array.from(entities.values())
+    let attackables = entitiesOnMap()
         .filter(e => e.id !== caster.id)
         .filter(e => e.hp !== undefined && !e.dead)
-        .filter<EntityOnMap>(isOnMap)
         .filter(e => visibleToCaster.get(e.location.x, e.location.y) > 0)
         .filter(e => distance(e.location, caster.location) <= maximum_range);
     attackables.sort((a, b) => distance(a.location, caster.location)
@@ -863,8 +831,8 @@ function playerGoDownStairs() {
     }
 
     // Remove anything that's on the map
-    for (let entity of entities.values()) {
-        if (isOnMap(entity) && entity.id !== player.id) {
+    for (let entity of entitiesOnMap()) {
+        if (entity.id !== player.id) {
             entities.delete(entity.id);
         }
     }
@@ -885,8 +853,7 @@ function playerGoDownStairs() {
 
 function enemiesMove() {
     let lightMap = computeLightMap(player.location, gameMap);
-    let entitiesOnMap = Array.from(entities.values()).filter<EntityOnMap>(isOnMap);
-    for (let entity of entitiesOnMap) {
+    for (let entity of entitiesOnMap()) {
         if (!entity.dead && entity.ai) {
             switch (entity.ai.behavior) {
                 case 'move_to_player': {
@@ -1073,7 +1040,6 @@ function createInventoryOverlay(actionType: string) {
 function handlePlayerDeadKeys(key: string): Action {
     const actions = {
         o:  ['toggle-debug'],
-        r:  ['restore-game'],
         c:  ['character-open'],
     };
     return actions[key];
@@ -1094,7 +1060,6 @@ function handlePlayerKeys(key: string): Action {
         '>':         ['stairs-down'],
         u:           ['inventory-open-use'],
         d:           ['inventory-open-drop'],
-        s:           ['save-game'],
     };
     let action = actions[key];
     return action || handlePlayerDeadKeys(key);
@@ -1180,24 +1145,6 @@ function runAction(action: Action) {
         dropItem(player, entities.get(id));
         break;
     }
-    case 'restore-game': {
-        let json = window.localStorage.getItem(STORAGE_KEY);
-        if (json === null) {
-            setTemporaryOverlayMessage("There is no saved game.");
-        } else {
-            setTemporaryOverlayMessage("Restored saved game.");
-            deserializeGlobalState(json);
-            drawMessages();
-            draw();
-        }
-        break;
-    }
-    case 'save-game': {
-        let json = serializeGlobalState();
-        window.localStorage.setItem(STORAGE_KEY, json);
-        setTemporaryOverlayMessage("Saved game.");
-        break;
-    }
     case 'toggle-debug': {
         DEBUG_ALL_VISIBLE = !DEBUG_ALL_VISIBLE;
         break;
@@ -1230,8 +1177,8 @@ function handleKeyDown(event: KeyboardEvent) {
 function handleMousemove(event: MouseEvent) {
     let lightMap = computeLightMap(player.location, gameMap);
     let [x, y] = display.eventToPosition(event); // returns -1, -1 for out of bounds
-    let entities = lightMap.get(x, y) > 0.0 ? allEntitiesAt(x, y) : [];
-    let text = entities.map(e => e.name).join("\n");
+    let entitiesAtMouse = lightMap.get(x, y) > 0.0 ? allEntitiesAt(x, y) : [];
+    let text = entitiesAtMouse.map(e => e.name).join("\n");
     setOverlayMessage(text);
 }
 
