@@ -233,7 +233,7 @@ I /did/ like that monsters down at the end of the corridor looked smaller, and t
 :CUSTOM_ID: map
 :END:
 
-I'd like to try "thin walls". I've wanted to try thin walls for a long time, and this is my chance. I'll have to replace the existing thick-wall-based dungeon generator with a new algorithm that generates thin walls. I think this will take most of week 2. I'll also have to replace the thick-wall-based field of view algorithm, maybe starting with [[/articles/visibility/][this]]. I think that may take much of week 3.
+I'd like to try "thin walls". I've wanted to try thin walls for a long time, and this is my chance. I'll have to replace the existing thick-wall-based dungeon generator with a new algorithm that generates thin walls. I think this will take most of week 2. I'll also have to replace the thick-wall-based field of view algorithm, maybe starting with [[href:/articles/visibility/][this]]. I think that may take much of week 3.
 
 ** Data structures
 :PROPERTIES:

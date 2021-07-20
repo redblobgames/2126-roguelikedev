@@ -59,11 +59,11 @@ const ENTITY_PROPERTIES = {
     ENTITY_PROPERTIES. This loop looks weird but I kept having bugs
     where I forgot to forward a property manually, so I wanted to
     automate it. */
-export function calculateEquipmentBonus(equipment, field) {
+export function calculateEquipmentBonus(equipment, field: string) {
     if (!equipment) return 0;
     return equipment
-        .filter(id => id !== null)
-        .reduce((sum, id) => sum + (entities.get(id)[field] || 0), 0);
+        .filter((id: number|null) => id !== null)
+        .reduce((sum: number, id: number) => sum + (entities.get(id)[field] || 0), 0);
 }
 const entity_prototype = {
     get increased_max_hp() { return calculateEquipmentBonus(this.equipment, 'bonus_max_hp'); },
@@ -80,6 +80,7 @@ for (let property of
 }
 
 export class Entities extends Map<number, Entity> {
+    player = null;
     id = 0;
 
     create(type: string, location: Location, properties={}): Entity {
@@ -147,3 +148,32 @@ export class Entities extends Map<number, Entity> {
 // code doesn't depend on that, the equipment bonuses do, for now
 export let entities = new Entities();
 
+
+// The player is also a global singleton, but I put it inside the
+// entities object
+/** inventory is represented as an array with (null | entity.id) */
+function createInventoryArray(capacity: number): any[] {
+    return Array.from({length: capacity}, () => null);
+}
+
+entities.player = (function() {
+    let player = entities.create(
+        'player', NOWHERE,
+        {
+            base_max_hp: 100,
+            base_defense: 1, base_power: 4,
+            xp: 0, level: 1,
+            inventory: createInventoryArray(26),
+            equipment: createInventoryArray(26),
+        }
+    ) as EntityOnMap; // NOTE: I'm lying, as it's not actually this type yet until I move the player to the first room
+
+    // Insert the initial equipment with the correct invariants
+    function equip(slot: number, type: string) {
+        let entity = entities.create(type, {equipped_by: player.id, slot: slot});
+        player.equipment[slot] = entity.id;
+    }
+    equip(EQUIP_MAIN_HAND, 'dagger');
+    equip(EQUIP_OFF_HAND, 'towel');
+    return player;
+})();

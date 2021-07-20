@@ -4,6 +4,7 @@
         "target": "esnext",
         "moduleResolution": "node",
         "lib": ["dom", "dom.iterable", "esnext"],
-        "allowJs": true
+        "allowJs": true,
+        "noEmit": true,
     },
 }
