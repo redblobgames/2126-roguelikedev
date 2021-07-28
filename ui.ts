@@ -148,11 +148,10 @@ function updateInstructions() {
     
     let html = ``;
     if (currentKeyHandler() === handlePlayerKeys) {
-        html = `Arrows move, <kbd>S</kbd>ave`;
+        html = `Arrows move`;
         let hasItems = player.inventory.filter((id: number|null) => id !== null).length > 0;
         let onItem = standingOn.filter(e => e.item).length > 0;
         let onStairs = standingOn.filter(e => e.stairs).length > 0;
-        html += ` game`;
         if (hasItems) html += `, <kbd>U</kbd>se, <kbd>D</kbd>rop`;
         if (onItem) html += `, <kbd>G</kbd>et item`;
         if (onStairs) html += `, <kbd>&gt;</kbd> stairs`;

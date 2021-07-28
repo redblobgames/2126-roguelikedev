@@ -62,7 +62,7 @@ function edgeToKey(e: Edge): string { return `${e.x},${e.y},${e.s}`; }
 function createTileMap<T>(): TileMap<T> {
     function key(x: number, y: number) { return tileToKey({x, y}); }
     return {
-        _values: {}, // use object instead of Map so it can be saved to json
+        _values: {},
         keys() {
             return Object.keys(this._values).map(key => {
                 let [x, y] = key.split(',');
