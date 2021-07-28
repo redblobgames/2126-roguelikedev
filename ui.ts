@@ -8,8 +8,8 @@ import { NUM_LAYERS, entities } from "./entity";
 import { WIDTH, HEIGHT, gameMap } from "./map";
 import { xpForLevel, playerMoveBy, playerPickupItem, useItem, dropItem, playerGoDownStairs } from "./simulation";
 
-const VIEWWIDTH = 21, VIEWHEIGHT = 15;
-let DEBUG_ALL_VISIBLE = true; // TODO: fov is broken, need to rewrite it
+const VIEWWIDTH = 23, VIEWHEIGHT = 17;
+let DEBUG_ALL_VISIBLE = false;
 
 
 const display = {
@@ -63,6 +63,7 @@ let previouslyDrawnSprites = Array.from({length: NUM_LAYERS}, () => new Map<numb
 
 export function draw() {
     const player = entities.player;
+    gameMap.setExplored(player.location);
     
     document.querySelector<HTMLElement>("#health-bar").style.width = `${Math.ceil(100*player.hp/player.effective_max_hp)}%`;
     document.querySelector<HTMLElement>("#health-text").textContent = ` HP: ${player.hp} / ${player.effective_max_hp}`;
@@ -70,7 +71,7 @@ export function draw() {
     // Draw the map
     let svgTileHtml = ``;
     let svgWallHtml = ``;
-    function explored(_x: number, _y: number) { return true; /* gameMap.tiles.has(x, y) && gameMap.tiles.get(x, y).explored; */ /* TODO: reimplement this */ }
+    function explored(x: number, y: number) { return gameMap.isExplored({x, y}) || DEBUG_ALL_VISIBLE; }
     for (let y = Math.floor(player.location.y - VIEWHEIGHT/2);
          y <= Math.ceil(player.location.y + VIEWHEIGHT/2); y++) {
         for (let x = Math.floor(player.location.x - VIEWWIDTH/2);
@@ -82,12 +83,12 @@ export function draw() {
             }
             if (gameMap.walls.has(x, y, 'W') && (explored(x, y) || explored(x-1, y))) {
                 let fg = (gameMap.isVisible(player.location, {x, y}) || gameMap.isVisible(player.location, {x: x-1, y}))
-                    ? "hsl(50, 15%, 65%)" : "hsl(250, 25%, 30%)";
+                    ? "hsl(50, 15%, 65%)" : "hsl(250, 15%, 50%)";
                 svgWallHtml += `<line x1="${x}" y1="${y}" x2="${x}" y2="${y+1}" fill="none" stroke="${fg}" stroke-width="0.1" stroke-linecap="round"/>`;
             }
             if (gameMap.walls.has(x, y, 'N') && (explored(x, y) || explored(x, y-1))) {
                 let fg = (gameMap.isVisible(player.location, {x, y}) || gameMap.isVisible(player.location, {x, y: y-1}))
-                ? "hsl(50, 15%, 65%)" : "hsl(250, 25%, 30%)";
+                ? "hsl(50, 15%, 65%)" : "hsl(250, 15%, 50%)";
                 svgWallHtml += `<line x1="${x}" y1="${y}" x2="${x+1}" y2="${y}" fill="none" stroke="${fg}" stroke-width="0.1" stroke-linecap="round"/>`;
             }
         }
@@ -105,9 +106,8 @@ export function draw() {
     let spritesToDraw = Array.from({length: NUM_LAYERS}, () => new Map<number, SVGElement>());
     let entitiesArray = Array.from(entities.onMap());
     for (let entity of entitiesArray) {
-        let {x, y} = entity.location;
-        let explored = gameMap.tiles.get(x, y)?.explored;
-        if (gameMap.isVisible(player.location, {x, y}) || (explored && entity.visible_in_shadow)) {
+        let explored = gameMap.isExplored(entity.location) || DEBUG_ALL_VISIBLE;
+        if (gameMap.isVisible(player.location, entity.location) || (explored && entity.visible_in_shadow)) {
             let layer = entity.render_layer;
             let [sprite, fg] = entity.visuals;
             // Draw it twice, once to make a wide outline to partially
@@ -119,7 +119,7 @@ export function draw() {
                 <use class="entity-bg" width="1" height="1" href="#${sprite}"/>
                 <use class="entity-fg" width="1" height="1" href="#${sprite}" fill="${fg}"/>
             `;
-            node.style.transform = `translate(${x}px,${y}px)`;
+            node.style.transform = `translate(${entity.location.x}px,${entity.location.y}px)`;
             spritesToDraw[layer].set(entity.id, node);
         }
     }

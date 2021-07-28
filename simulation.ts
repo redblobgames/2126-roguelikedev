@@ -252,6 +252,7 @@ export function playerMoveBy(dx: number, dy: number) {
         y = player.location.y + dy;
     if (canMoveTo(player, x, y)) {
         let target = entities.blockingEntityAt(x, y);
+        // TODO: open doors too
         if (target && target.id !== player.id) {
             attack(player, target);
         } else {

@@ -275,7 +275,7 @@ for i in range(number_of_monsters):
 
 Last year I was following the tutorial closely so I also had rectangular rooms. My new map generator does not make all rooms rectangular, so I changed it to keep a list of tiles per room, and then selected a tile randomly.
 
-I also ended up removing the save/load feature. Last year I had tried limiting the data structures to be JSON-compatible so that it would be easy to save and load, but I ended up complicating the code to support it. I decided it's not worth it for this year's project.
+*I ended up removing the save/load feature.* Last year I had tried limiting the data structures to be JSON-compatible so that it would be easy to save and load, but I ended up complicating the code to support it. I decided it's not worth it for this year's project.
 
 Removing the old map generator and putting in a placeholder let me find all the places in the code that were making assumptions about how the map generator worked. It was also a reminder to myself that when I get stuck, I should break the problem down into smaller pieces so that I can make progress with smaller steps, /even if those intermediate steps will get thrown away later/.
 
@@ -334,6 +334,48 @@ The next step is to add doors. I started by making a list of all walls between e
 I think there are too many doorways here. I'm taking /every/ pair of rooms  that touch and making a doorway between them. To do something smarter, I'm going to have to build a room graph and decide on connectivity. Maybe a minimum spanning tree? Special cases for corridors? Those are problems for another day.
 
 The new maps lead to a problem: there are too many enemies. This is because there are more rooms, the rooms are smaller, and the lack of FOV means that all enemies move towards the player.
+
+* Field of view
+
+In week 3 it was time to work on the field of view algorithm. Some choices:
+
+- use polygonal field of view using  [[href:/articles/visibility/][Asano's sweep algorithm]] (1985)
+- use polygonal field of view using the fairly new [[https://scholar.google.com/scholar?cluster=11179288360296920832][triangular expansion algorithm]] (2014)
+- create my own algorithm based on [[https://www.albertford.com/shadowcasting/][recursive shadowcasting]]
+
+What I /should/ do is use my existing working code for the sweep algorithm. Since it's not designed for tile worlds, I'd convert the input grid into the format it needs, run the algorithm, then convert the polygon output into tile data. That's a common pattern — an algorithm may not be exactly what you need but you can adapt the input, run the algorithm, and adapt the output. Once I get that working /then/ I can go back and try something more ambitious like implementing triangular expansion or inventing my own algorithm. But nooooo, [[href:/x/2128-thin-wall-fov/][I got distracted trying to make my own algorithm]] and wasted the whole week on it. So now I have nothing to show.
+
+While working out the details of how field of view should work, I realized that even though field of view is /cool/, part of what I'm doing in this project is /doing things differently/. I'm revisiting each topic from the tutorial but I want to solve them in a different way. In this case I want to shift the thinking from tiles to rooms, and from rooms to levels. So that means visibility would be across an entire room, and monster/item placement would be across an entire level.
+
+Unfortunately I realized this a week too late, as I have come up with a nice algorithm for tile-based field of view! (I haven't finished implementing it yet)
+
+So I'm going to put the tile-based and polygon-based visibility algorithms on hold, and describe what I want to see from room-based visibility:
+
+1. There are /doors/ between rooms. You can't see beyond a room.
+1. You have to /open/ a door to look into it; this takes a turn.
+1. When you go through the door, it closes behind you (maybe — undecided). This means you can only see multiple rooms when you're standing at the doorway, on either side of that opening while the door is open.
+1. You see the entire room you're in. Concave rooms are visible too, as though they were convex.
+1. The monsters in the room see you. The monsters outside the room don't, until you open a door.
+1. There's no invisibility due to pillars.
+
+To make this work I need to go back and change the data structures to let me focus on /rooms/ and also /doorways/. Since I spent Week 3 on an algorithm I'm not going to use, I spent Week 4 implementing this. 
+
+How well did it work?
+Well, it was ok but I'm not happy with it. Here's a single room lit up:
+
+[[./screenshots/ch4-room-visibility.png]]
+
+Here's an adjacent room lit up when standing at the door:
+
+[[./screenshots/ch4-adjacent-room-visibility.png]]
+
+But it turns out the map generator generates some weird rooms, like this "one":
+
+[[./screenshots/ch4-glitch.png]]
+
+The way things are drawn doesn't work so well, because shaded walls and lit walls don't draw in the right order (shaded first, lit second). And there are several other things that didn't work well. I think I'll have to come back to this later, after working on enemies. If I still can't make it fun I might go back to tile-based visibility.
+
+At least the game is working again.
 
 
 #+begin_export html
