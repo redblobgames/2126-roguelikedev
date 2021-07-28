@@ -25,4 +25,3 @@ export function evaluateStepFunction(table: number[][], x: number) {
     let candidates = table.filter(xy => x >= xy[0]);
     return candidates.length > 0 ? candidates[candidates.length-1][1] : 0;
 }
-

@@ -345,6 +345,8 @@ In week 3 it was time to work on the field of view algorithm. Some choices:
 
 What I /should/ do is use my existing working code for the sweep algorithm. Since it's not designed for tile worlds, I'd convert the input grid into the format it needs, run the algorithm, then convert the polygon output into tile data. That's a common pattern — an algorithm may not be exactly what you need but you can adapt the input, run the algorithm, and adapt the output. Once I get that working /then/ I can go back and try something more ambitious like implementing triangular expansion or inventing my own algorithm. But nooooo, [[href:/x/2128-thin-wall-fov/][I got distracted trying to make my own algorithm]] and wasted the whole week on it. So now I have nothing to show.
 
+** Room-based visibility
+
 While working out the details of how field of view should work, I realized that even though field of view is /cool/, part of what I'm doing in this project is /doing things differently/. I'm revisiting each topic from the tutorial but I want to solve them in a different way. In this case I want to shift the thinking from tiles to rooms, and from rooms to levels. So that means visibility would be across an entire room, and monster/item placement would be across an entire level.
 
 Unfortunately I realized this a week too late, as I have come up with a nice algorithm for tile-based field of view! (I haven't finished implementing it yet)
@@ -373,10 +375,57 @@ But it turns out the map generator generates some weird rooms, like this "one":
 
 [[./screenshots/ch4-glitch.png]]
 
-The way things are drawn doesn't work so well, because shaded walls and lit walls don't draw in the right order (shaded first, lit second). And there are several other things that didn't work well. I think I'll have to come back to this later, after working on enemies. If I still can't make it fun I might go back to tile-based visibility.
+I hadn't noticed this before, but room-based visibility makes it quite apparent.  Even though the maps aren't working well, at least the game is working again.
 
-At least the game is working again.
+** Another map generator
 
+To solve the map problems, I changed the algorithm from flood fill to this:
+
+1. Pick lots of starting points for room growth.
+2. Alternate expanding horizontally and vertically
+3. Expand to an adjacent tile only if the previous tile was already in the room
+
+This is probably going to need more of an explanation one of these days.
+
+#+begin_src js
+let left   = start.x;
+let top    = start.y;
+let right  = start.x;
+let bottom = start.y;
+
+for (let distance = 1; distance <= Math.max(roomSize.w, roomSize.h)/2; distance++) {
+    if (distance <= roomSize.w/2) {
+        expand(left, top, left, bottom, {dx: -1, dy: 0}); left--;
+        expand(right, top, right, bottom, {dx: +1, dy: 0}); right++;
+    }
+    if (distance <= roomSize.h/2) {
+        expand(left, top, right, top, {dx: 0, dy: -1}); top--;
+        expand(left, bottom, right, bottom, {dx: 0, dy: +1}); bottom++;
+    }
+}
+#+end_src
+
+The helper function will expand a rectangle of tiles in one direction:
+
+#+begin_src js
+function expand(x1: number, y1: number, x2: number, y2: number, {dx, dy}): void {
+    for (let x = x1; x <= x2; x++) {
+        for (let y = y1; y <= y2; y++) {
+            if (gameMap.tiles.get(x, y)?.roomId === roomId
+                    && !gameMap.tiles.has(x + dx, y + dy)) {
+                gameMap.tiles.set(x + dx, y + dy, {roomId});
+            }
+        }
+    }
+}
+#+end_src
+
+With this new code, rooms will not expand through diagonal corners. The rooms are a little less interestingly shaped but on the other hand they should be easier to work with, especially when I want to populate them with objects.
+
+
+[[./screenshots/ch4-map-generation.png]]
+
+I still have a problem with disconnected rooms. My plan is to use a connected components algorithm to find the largest connected component, then discard the rest.
 
 #+begin_export html
 <x:footer>

@@ -187,8 +187,6 @@ function createGameMap(dungeonLevel: number): GameMap {
     const seeds = Array.from({length: NUM_ROOMS}, () => ({
         x: randint(0, WIDTH), y: randint(0, HEIGHT)
     }));
-    const DIRS_8 = [[0, -1], [+1, 0], [0, +1], [-1, 0],
-                    [-1, -1], [+1, -1], [+1, +1], [-1, +1]];
     gameMap.rooms = new Map(seeds.map((seed, index) => [index, {
         type: 'regular',
         center: seed,
@@ -203,32 +201,44 @@ function createGameMap(dungeonLevel: number): GameMap {
             : roomId < NUM_ROOMS * 0.9 ? {w: randint(2, 8), h: randint(2, 8)}
             : {w: 15, h: 15};
         
-        let left   = Math.max(0, seeds[roomId].x - (roomSize.w >> 1)),
-            top    = Math.max(0, seeds[roomId].y - (roomSize.h >> 1)),
-            right  = Math.min(WIDTH-1, left + roomSize.w - 1),
-            bottom = Math.min(HEIGHT-1, top + roomSize.h - 1);
-
         let start = seeds[roomId];
         if (gameMap.tiles.has(start.x, start.y)) {
             // This room was placed inside an existing room, so skip it. It will be allocated 0 tiles.
             continue;
         }
-        let queue = [start];
-        let queueIndex = 0;
+
         gameMap.tiles.set(start.x, start.y, {roomId});
-        while (queueIndex < queue.length) {
-            let current = queue[queueIndex++];
-            for (let neighbor of DIRS_8.map(([dx, dy]) => ({x: current.x + dx, y: current.y + dy}))) {
-                if (neighbor.x < left || neighbor.x > right || neighbor.y < top || neighbor.y > bottom) {
-                    continue; // out of bounds
-                }
-                if (!gameMap.tiles.has(neighbor.x, neighbor.y)) {
-                    gameMap.tiles.set(neighbor.x, neighbor.y, {roomId});
-                    queue.push(neighbor);
+
+        let assignedTiles = [start];
+        function expand(x1: number, y1: number, x2: number, y2: number, {dx, dy}): void {
+            for (let x = x1; x <= x2; x++) {
+                for (let y = y1; y <= y2; y++) {
+                    if (gameMap.tiles.get(x, y)?.roomId === roomId
+                            && !gameMap.tiles.has(x + dx, y + dy)) {
+                        gameMap.tiles.set(x + dx, y + dy, {roomId});
+                        assignedTiles.push({x: x + dx, y: y + dy});
+                    }
                 }
             }
         }
-        gameMap.rooms.get(roomId).tiles = queue;
+
+        let left   = start.x;
+        let top    = start.y;
+        let right  = start.x;
+        let bottom = start.y;
+
+        for (let distance = 1; distance <= Math.max(roomSize.w, roomSize.h)/2; distance++) {
+            if (distance <= roomSize.w/2) {
+                expand(left, top, left, bottom, {dx: -1, dy: 0}); left--;
+                expand(right, top, right, bottom, {dx: +1, dy: 0}); right++;
+            }
+            if (distance <= roomSize.h/2) {
+                expand(left, top, right, top, {dx: 0, dy: -1}); top--;
+                expand(left, bottom, right, bottom, {dx: 0, dy: +1}); bottom++;
+            }
+        }
+        
+        gameMap.rooms.get(roomId).tiles = assignedTiles;
     }
 
     gameMap.dungeonLevel = dungeonLevel;
