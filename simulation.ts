@@ -328,9 +328,15 @@ export function enemiesMove() {
                 }
                 case 'confused': {
                     if (--entity.ai.turns > 0) {
-                        let stepx = randint(-1, 1), stepy = randint(-1, 1);
+                        let stepx = 0, stepy = 0;
+                        switch (randint(0, 3)) {
+                            case 0: stepx = -1; break;
+                            case 1: stepx = +1; break;
+                            case 2: stepy = -1; break;
+                            case 3: stepy = +1; break;
+                        }
                         let x = entity.location.x + stepx,
-                        y = entity.location.y + stepy;
+                            y = entity.location.y + stepy;
                         if (canMoveTo(entity, x, y) && !entities.blockingEntityAt(x, y)) {
                             entities.moveEntityTo(entity, {x, y});
                         }
