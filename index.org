@@ -422,10 +422,17 @@ function expand(x1: number, y1: number, x2: number, y2: number, {dx, dy}): void 
 
 With this new code, rooms will not expand through diagonal corners. The rooms are a little less interestingly shaped but on the other hand they should be easier to work with, especially when I want to populate them with objects.
 
-
 [[./screenshots/ch4-map-generation.png]]
 
 I still have a problem with disconnected rooms. My plan is to use a connected components algorithm to find the largest connected component, then discard the rest.
+
+** Opening doors
+
+As part of room-based visibility I wanted doors that block vision until you open them. This took some time, as I implemented several different approaches until settling on a Map from edges to an enum: =wall= | =closed-door= | =open-door=. In this screenshot you can see both closed and open doors.
+
+[[./screenshots/ch4-doors.png]]
+
+Sometimes when I can't figure out how to do the thing I actually want to do, I'll refactor adjacent code to help me think about the problem. In this case, I cleaned up the representation of walls, room connections, and tiles, and had an "aha" moment for how I wanted to represent the doors. It simplified not only the data structures but also the visibility code.
 
 #+begin_export html
 <x:footer>

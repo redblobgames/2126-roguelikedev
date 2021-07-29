@@ -5,7 +5,7 @@
  */
 
 import { NUM_LAYERS, entities } from "./entity";
-import { WIDTH, HEIGHT, gameMap } from "./map";
+import { WIDTH, HEIGHT, Edge, edgeJoins, gameMap } from "./map";
 import { xpForLevel, playerMoveBy, playerPickupItem, useItem, dropItem, playerGoDownStairs } from "./simulation";
 
 const VIEWWIDTH = 23, VIEWHEIGHT = 17;
@@ -72,6 +72,30 @@ export function draw() {
     let svgTileHtml = ``;
     let svgWallHtml = ``;
     function explored(x: number, y: number) { return gameMap.isExplored({x, y}) || DEBUG_ALL_VISIBLE; }
+    function drawEdge(edge: Edge) {
+        let edgeData = gameMap.edges.get(edge);
+        if (!edgeData) { return; } // nothing here
+
+        let [tile1, tile2] = edgeJoins(edge);
+        let isExplored = explored(tile1.x, tile1.y) || explored(tile2.x, tile2.y);
+        if (!isExplored) { return; } // can't be seen
+        
+        let isVisible = gameMap.isVisible(player.location, tile1) || gameMap.isVisible(player.location, tile2);
+        let [dx, dy] = edge.s === 'W'? [0, 1] : [1, 0];
+        let fg = isVisible? "hsl(50, 15%, 65%)" : "hsl(250, 15%, 50%)";
+        let fgBright = isVisible? "hsl(50, 15%, 85%)" : "hsl(250, 15%, 65%)";
+
+        switch (edgeData) {
+            case 'wall': svgWallHtml += `<path d="M ${edge.x},${edge.y} l ${dx},${dy}" 
+                                               fill="none" stroke="${fg}" stroke-width="0.1" stroke-linecap="round"/>`; break;
+            case 'closed-door': svgWallHtml += `<path d="M ${edge.x+dx*0.2},${edge.y+dy*0.2} l ${dx*0.6},${dy*0.6}" 
+                                                      fill="none" stroke="${fgBright}" stroke-width="0.3" stroke-linecap="butt"/>`; break;
+            case 'open-door': svgWallHtml += `<path d="M ${edge.x+dx*0.1-dy*0.1},${edge.y+dy*0.1+dx*0.1} l ${dy*0.2},${-dx*0.2} 
+                                                       M ${edge.x+dx*0.9-dy*0.1},${edge.y+dy*0.9+dx*0.1} l ${dy*0.2},${-dx*0.2}" 
+                                                    fill="none" stroke="${fgBright}" stroke-width="0.15" stroke-linecap="butt"/>`; break;
+        }
+    }
+    
     for (let y = Math.floor(player.location.y - VIEWHEIGHT/2);
          y <= Math.ceil(player.location.y + VIEWHEIGHT/2); y++) {
         for (let x = Math.floor(player.location.x - VIEWWIDTH/2);
@@ -81,16 +105,8 @@ export function draw() {
                 let bg = lit ? "hsl(50, 5%, 35%)" : "hsl(250, 10%, 25%)";
                 svgTileHtml += `<rect x="${x}" y="${y}" width="1" height="1" fill="${bg}" stroke="${bg}" stroke-width="0.05"/>`;
             }
-            if (gameMap.walls.has(x, y, 'W') && (explored(x, y) || explored(x-1, y))) {
-                let fg = (gameMap.isVisible(player.location, {x, y}) || gameMap.isVisible(player.location, {x: x-1, y}))
-                    ? "hsl(50, 15%, 65%)" : "hsl(250, 15%, 50%)";
-                svgWallHtml += `<line x1="${x}" y1="${y}" x2="${x}" y2="${y+1}" fill="none" stroke="${fg}" stroke-width="0.1" stroke-linecap="round"/>`;
-            }
-            if (gameMap.walls.has(x, y, 'N') && (explored(x, y) || explored(x, y-1))) {
-                let fg = (gameMap.isVisible(player.location, {x, y}) || gameMap.isVisible(player.location, {x, y: y-1}))
-                ? "hsl(50, 15%, 65%)" : "hsl(250, 15%, 50%)";
-                svgWallHtml += `<line x1="${x}" y1="${y}" x2="${x+1}" y2="${y}" fill="none" stroke="${fg}" stroke-width="0.1" stroke-linecap="round"/>`;
-            }
+            drawEdge({x, y, s: 'W'});
+            drawEdge({x, y, s: 'N'});
         }
     }
     display.el.querySelector<HTMLElement>(".view").style.transform = `translate(${-player.location.x-0.5+VIEWWIDTH/2}px, ${-player.location.y-0.5+VIEWHEIGHT/2}px)`;

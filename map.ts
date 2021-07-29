@@ -12,27 +12,30 @@ export const WIDTH = 40;
 export const HEIGHT = 30;
 export const NUM_ROOMS = 100;
 
-type Side = 'W' | 'N';
-type Edge = {x: number; y: number; s: Side};
+export type Side = 'W' | 'N';
+export type Edge = {x: number; y: number; s: Side};
+
+/** For convenience, a Map object that has a way to convert the key into a string */
+class KeyMap<T, U> extends Map {
+    toStr: (key: T) => string;
+    constructor (toStr: (key: T) => string) {
+        super();
+        this.toStr = toStr;
+    }
+    get(key: T): U        { return super.get(this.toStr(key)); }
+    has(key: T): boolean  { return super.has(this.toStr(key)); }
+    set(key: T, value: U) { return super.set(this.toStr(key), value); }
+    delete(key: T)        { return super.delete(this.toStr(key)); }
+}
 
 type TileData = {
     roomId: RoomId;
     // maybe floor type, passability, water, etc
 };
+type TileMap = KeyMap<Point, TileData>;
 
-type TileMap<T> = {
-    _values: any;
-    keys(): {x: number, y: number}[];
-    has(x: number, y: number): boolean;
-    get(x: number, y: number): T;
-    set(x: number, y: number, value: T): void;
-};
-
-type WallSet = {
-    has(x: number, y: number, s: Side): boolean;
-    add(x: number, y: number, s: Side): void;
-    delete(x: number, y: number, s: Side): void;
-};
+type EdgeData = 'wall' | 'closed-door' | 'open-door';
+type EdgeMap = KeyMap<Edge, EdgeData>;
 
 type RoomId = number;
 type DoorId = Edge;
@@ -45,54 +48,59 @@ type Room = {
     explored: boolean;
 };
 
-type GameMap = {
-    dungeonLevel: number;
-    tiles: TileMap<TileData>;
-    walls: WallSet;
-    rooms: Map<RoomId, Room>;
-    doors: Map<String, {tile1: Point, tile2: Point, open: boolean}>;
-    setExplored(at: Point): void;
-    isExplored(at: Point): boolean;
-    isVisible(from: Point, to: Point): boolean;
+class GameMap {
+    dungeonLevel: number = 1;
+    tiles: TileMap = new KeyMap(tileToKey);
+    edges: EdgeMap = new KeyMap(edgeToKey);
+    rooms: Map<RoomId, Room> = new Map();
+    
+    setExplored(at: Point): void {
+        let tileData = this.tiles.get(at);
+        let room = this.rooms.get(tileData?.roomId);
+        if (!room) throw "Invariant violated: setExplored on a non-room";
+        room.explored = true;
+    }
+    
+    isExplored(at: Point): boolean {
+        let tileData = this.tiles.get(at);
+        return this.rooms.get(tileData?.roomId)?.explored;
+    }
+    
+    isVisible(from: Point, to: Point): boolean {
+        let tile1 = this.tiles.get(from);
+        let tile2 = this.tiles.get(to);
+        if (!tile1) { throw "Invariant violated: isVisible should be called from inside a room"; }
+        if (tile1.roomId === tile2?.roomId) {
+            // You can see everything in the same room
+            return true;
+        }
+        for (let {edge, tile} of adjacentToTile(from)) {
+            if (this.edges.get(edge) === 'open-door'
+                && gameMap.tiles.get(tile)?.roomId === tile2?.roomId) {
+                return true; // You can see into this room because there's an open door
+            }
+        }
+        return false;
+    }
 };
 
 function tileToKey(p: Point): string { return `${p.x},${p.y}`; }
 function edgeToKey(e: Edge): string { return `${e.x},${e.y},${e.s}`; }
 
-function createTileMap<T>(): TileMap<T> {
-    function key(x: number, y: number) { return tileToKey({x, y}); }
-    return {
-        _values: {},
-        keys() {
-            return Object.keys(this._values).map(key => {
-                let [x, y] = key.split(',');
-                return {x: parseFloat(x), y: parseFloat(y)};
-            });
-        },
-        has(x: number, y: number): boolean  { return this._values[key(x, y)] !== undefined; },
-        get(x: number, y: number): T        { return this._values[key(x, y)]; },
-        set(x: number, y: number, value: T) { this._values[key(x, y)] = value; },
-    };
-}
-
-function createWallSet() {
-    function key(x: number, y: number, s: Side) { return edgeToKey({x, y, s}); }
-    return {
-        _values: {},
-        has(x: number, y: number, s: Side): boolean { return this._values[key(x, y, s)] !== undefined; },
-        add(x: number, y: number, s: Side)          { this._values[key(x, y, s)] = true; },
-        delete(x: number, y: number, s: Side)       { delete this._values[key(x, y, s)]; },
-    };
-}
-
-function edgesAroundTile(p: Point): Edge[] {
+function adjacentToTile(p: Point): {edge: Edge, tile: Point}[] {
     let {x, y} = p;
     return [
-        {x, y, s: 'N'},
-        {x, y, s: 'W'},
-        {x, y: y+1, s: 'N'},
-        {x: x+1, y, s: 'W'},
+        {edge: {x, y, s: 'N'}, tile: {x, y: y-1}},
+        {edge: {x, y, s: 'W'}, tile: {x: x-1, y}},
+        {edge: {x, y: y+1, s: 'N'}, tile: {x, y: y+1}},
+        {edge: {x: x+1, y, s: 'W'}, tile: {x: x+1, y}},
     ];
+}
+
+export function edgeJoins(edge: Edge): [Point, Point] {
+    let tile1 = {x: edge.x, y: edge.y};
+    let tile2 = edge.s === 'W'? {x: edge.x-1, y: edge.y} : {x: edge.x, y: edge.y-1};
+    return [tile1, tile2];
 }
 
 export function edgeBetween(a: Point, b: Point): undefined | Edge {
@@ -145,44 +153,7 @@ function populateRoom(room: Room, dungeonLevel: number) {
 
 
 function createGameMap(dungeonLevel: number): GameMap {
-    let gameMap: GameMap = {
-        dungeonLevel,
-        tiles: createTileMap<TileData>(),
-        walls: createWallSet(),
-        rooms: new Map(),
-        doors: new Map(),
-        setExplored(at: Point) {
-            let tileData = this.tiles.get(at.x, at.y);
-            let room = this.rooms.get(tileData?.roomId);
-            if (!room) throw "Invariant violated: setExplored on a non-room";
-            room.explored = true;
-        },
-        isExplored(at: Point): boolean {
-            let tileData = this.tiles.get(at.x, at.y);
-            return this.rooms.get(tileData?.roomId)?.explored;
-        },
-        isVisible(from: Point, to: Point): boolean {
-            let tile1 = this.tiles.get(from.x, from.y);
-            let tile2 = this.tiles.get(to.x, to.y);
-            if (!tile1) { throw "Invariant violated: isVisible should be called from inside a room"; }
-            if (tile1.roomId === tile2?.roomId) {
-                // You can see everything in the same room
-                return true;
-            }
-            for (let {roomId, doorId} of this.rooms.get(tile1.roomId).adjacent) {
-                // TODO: what about open doors vs closed doors?
-                let door = this.doors.get(edgeToKey(doorId));
-                if (roomId === tile2?.roomId &&
-                    ((door.tile1.x === from.x && door.tile1.y === from.y)
-                        || (door.tile2.x === from.x && door.tile2.y === from.y))) {
-                    // You are standing next to a door, so you can see
-                    // the room on the other side
-                    return true;
-                }
-            }
-            return false;
-        },
-    };
+    let gameMap = new GameMap();
 
     const seeds = Array.from({length: NUM_ROOMS}, () => ({
         x: randint(0, WIDTH), y: randint(0, HEIGHT)
@@ -202,20 +173,20 @@ function createGameMap(dungeonLevel: number): GameMap {
             : {w: 15, h: 15};
         
         let start = seeds[roomId];
-        if (gameMap.tiles.has(start.x, start.y)) {
+        if (gameMap.tiles.has(start)) {
             // This room was placed inside an existing room, so skip it. It will be allocated 0 tiles.
             continue;
         }
 
-        gameMap.tiles.set(start.x, start.y, {roomId});
+        gameMap.tiles.set(start, {roomId});
 
         let assignedTiles = [start];
         function expand(x1: number, y1: number, x2: number, y2: number, {dx, dy}): void {
             for (let x = x1; x <= x2; x++) {
                 for (let y = y1; y <= y2; y++) {
-                    if (gameMap.tiles.get(x, y)?.roomId === roomId
-                            && !gameMap.tiles.has(x + dx, y + dy)) {
-                        gameMap.tiles.set(x + dx, y + dy, {roomId});
+                    if (gameMap.tiles.get({x, y})?.roomId === roomId
+                        && !gameMap.tiles.has({x: x + dx, y: y + dy})) {
+                        gameMap.tiles.set({x: x + dx, y: y + dy}, {roomId});
                         assignedTiles.push({x: x + dx, y: y + dy});
                     }
                 }
@@ -253,19 +224,20 @@ function createGameMap(dungeonLevel: number): GameMap {
     // of rooms will become a door.
     let doorCandidates = new Map<string, {tile1: Point, tile2: Point, edge: Edge}[]>();
     function addWallMaybe(x1: number, y1: number, x2: number, y2: number, edge: Edge) {
-        let room1 = roomAt(x1, y1), room2 = roomAt(x2, y2);
+        let tile1 = {x: x1, y: y1};
+        let tile2 = {x: x2, y: y2};
+        let room1 = gameMap.tiles.get(tile1)?.roomId, room2 = gameMap.tiles.get(tile2)?.roomId;
         if (room1 !== room2) {
-            gameMap.walls.add(edge.x, edge.y, edge.s);
-            if (room1 !== null && room2 !== null) {
+            gameMap.edges.set(edge, 'wall');
+            if (room1 !== undefined && room2 !== undefined) {
                 // Wish we had something like python's setdefault
                 let key = `${Math.min(room1, room2)},${Math.max(room1, room2)}`;
                 let edges = doorCandidates.has(key) ? doorCandidates.get(key) : [];
-                edges.push({tile1: {x: x1, y: y1}, tile2: {x: x2, y: y2}, edge});
+                edges.push({tile1, tile2, edge});
                 doorCandidates.set(key, edges);
             }
         }
     }
-    function roomAt(x: number, y: number): RoomId | null { return gameMap.tiles.get(x, y)?.roomId ?? null; }
     for (let room of gameMap.rooms.values()) {
         for (let {x, y} of room.tiles) {
             addWallMaybe(x-1, y, x, y, {x, y, s: 'W'});
@@ -278,10 +250,9 @@ function createGameMap(dungeonLevel: number): GameMap {
     // Now add doors by removing walls
     for (let doors of doorCandidates.values()) {
         let {tile1, tile2, edge} = RNG.getItem(doors);
-        let roomId1 = roomAt(tile1.x, tile1.y), roomId2 = roomAt(tile2.x, tile2.y);
-        if (roomId1 !== null && roomId2 !== null) {
-            gameMap.walls.delete(edge.x, edge.y, edge.s);
-            gameMap.doors.set(edgeToKey(edge), {tile1, tile2, open: false});
+        let roomId1 = gameMap.tiles.get(tile1)?.roomId, roomId2 = gameMap.tiles.get(tile2)?.roomId;
+        if (roomId1 !== undefined && roomId2 !== undefined) {
+            gameMap.edges.set(edge, 'closed-door');
             gameMap.rooms.get(roomId1).adjacent.push({roomId: roomId2, doorId: edge});
             gameMap.rooms.get(roomId2).adjacent.push({roomId: roomId1, doorId: edge});
         }
@@ -311,5 +282,5 @@ export function goToNextLevel(): void {
     Object.assign(gameMap, createGameMap(gameMap.dungeonLevel + 1));
 }
 
-export const gameMap = {dungeonLevel: 0} as GameMap;
+export const gameMap = new GameMap();
 goToNextLevel();

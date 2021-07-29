@@ -11,7 +11,8 @@ import { print, draw, targetingOverlay, upgradeOverlay } from "./ui";
 
 function canMoveTo(entity: EntityOnMap, x: number, y: number): boolean {
     let edge = edgeBetween(entity.location, {x, y});
-    return !gameMap.walls.has(edge.x, edge.y, edge.s);
+    let edgeData = gameMap.edges.get(edge);
+    return !edgeData || edgeData === 'open-door';
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -250,9 +251,13 @@ export function playerMoveBy(dx: number, dy: number) {
     const player = entities.player;
     let x = player.location.x + dx,
         y = player.location.y + dy;
-    if (canMoveTo(player, x, y)) {
+    let edge = edgeBetween(player.location, {x, y});
+    if (gameMap.edges.get(edge) === 'closed-door') {
+        // Open the door
+        gameMap.edges.set(edge, 'open-door');
+        enemiesMove();
+    } else if (canMoveTo(player, x, y)) {
         let target = entities.blockingEntityAt(x, y);
-        // TODO: open doors too
         if (target && target.id !== player.id) {
             attack(player, target);
         } else {
