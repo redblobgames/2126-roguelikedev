@@ -336,6 +336,9 @@ I think there are too many doorways here. I'm taking /every/ pair of rooms  that
 The new maps lead to a problem: there are too many enemies. This is because there are more rooms, the rooms are smaller, and the lack of FOV means that all enemies move towards the player.
 
 * Field of view
+:PROPERTIES:
+:CUSTOM_ID: field-of-view
+:END:
 
 In week 3 it was time to work on the field of view algorithm. Some choices:
 
@@ -346,6 +349,9 @@ In week 3 it was time to work on the field of view algorithm. Some choices:
 What I /should/ do is use my existing working code for the sweep algorithm. Since it's not designed for tile worlds, I'd convert the input grid into the format it needs, run the algorithm, then convert the polygon output into tile data. That's a common pattern — an algorithm may not be exactly what you need but you can adapt the input, run the algorithm, and adapt the output. Once I get that working /then/ I can go back and try something more ambitious like implementing triangular expansion or inventing my own algorithm. But nooooo, [[href:/x/2128-thin-wall-fov/][I got distracted trying to make my own algorithm]] and wasted the whole week on it. So now I have nothing to show.
 
 ** Room-based visibility
+:PROPERTIES:
+:CUSTOM_ID: room-based-visibility
+:END:
 
 While working out the details of how field of view should work, I realized that even though field of view is /cool/, part of what I'm doing in this project is /doing things differently/. I'm revisiting each topic from the tutorial but I want to solve them in a different way. In this case I want to shift the thinking from tiles to rooms, and from rooms to levels. So that means visibility would be across an entire room, and monster/item placement would be across an entire level.
 
@@ -378,6 +384,9 @@ But it turns out the map generator generates some weird rooms, like this "one":
 I hadn't noticed this before, but room-based visibility makes it quite apparent.  Even though the maps aren't working well, at least the game is working again.
 
 ** Another map generator
+:PROPERTIES:
+:CUSTOM_ID: another-map-generator
+:END:
 
 To solve the map problems, I changed the algorithm from flood fill to this:
 
@@ -427,12 +436,52 @@ With this new code, rooms will not expand through diagonal corners. The rooms ar
 I still have a problem with disconnected rooms. My plan is to use a connected components algorithm to find the largest connected component, then discard the rest.
 
 ** Opening doors
+:PROPERTIES:
+:CUSTOM_ID: opening-doors
+:END:
 
 As part of room-based visibility I wanted doors that block vision until you open them. This took some time, as I implemented several different approaches until settling on a Map from edges to an enum: =wall= | =closed-door= | =open-door=. In this screenshot you can see both closed and open doors.
 
 [[./screenshots/ch4-doors.png]]
 
 Sometimes when I can't figure out how to do the thing I actually want to do, I'll refactor adjacent code to help me think about the problem. In this case, I cleaned up the representation of walls, room connections, and tiles, and had an "aha" moment for how I wanted to represent the doors. It simplified not only the data structures but also the visibility code.
+
+* Inventory
+:PROPERTIES:
+:CUSTOM_ID: inventory
+:END:
+
+I've been wanting to try something different for inventory, and I decided I would keep the inventory visible on screen at all times. I'll limit the number of slots but add some stacking. One of the ideas I played with last year was was merging /equip/ and /use/ so that when you use a weapon or armor, it will equip it, and simultaneously unequip what you previously had. I'm thinking of going farther with this, merging /equip/ and /pick up/, so that as soon as you pick up an item you swap it with what you had. This would mean you can never hold onto extra equipment.
+
+** Inventory UI
+:PROPERTIES:
+:CUSTOM_ID: inventory-ui
+:END:
+
+The first step was to take the existing =<svg>= element and subdivide it, so that part of it is for the game map and part of it is for inventory:
+
+#+begin_export html
+<figure>
+  <svg viewBox="0 0 150 100">
+    <rect width="100" height="100" fill="hsl(150, 20%, 80%)" />
+    <rect x="100" width="50" height="100" fill="hsl(250, 20%, 70%)" />
+    <g text-anchor="middle" font-size="10" font-family="var(--sans-serif)">
+      <text x="50" y="50">Game map</text>
+      <text x="125" y="50">Inventory</text>
+    </g>
+  </svg>
+  <figcaption>Game ui split into map area and inventory area</figcaption>
+</figure>
+#+end_export
+
+As a bonus, this split allowed me to adjust the size of the debug view. When you press ~o~, it now zooms out to show more of the map. For the underlying implementation I use an SVG =transform= on the two sides of the UI, and transforms can be easily animated using CSS transitions.
+
+* Items
+:PROPERTIES:
+:CUSTOM_ID: items
+:END:
+
+I really like the replay in Hades and Brogue, and wonder how much of that I can do with items and how much from maps or something else. Slay the Spire may be some inspiration here too, as some of the cards can significantly change the way you play.
 
 #+begin_export html
 <x:footer>
@@ -453,6 +502,6 @@ Sometimes when I can't figure out how to do the thing I actually want to do, I'l
   </style>
 
   Created 25 Jun 2021; &#160;
-  <!-- hhmts start -->Last modified: 09 Jul 2021<!-- hhmts end -->
+  <!-- hhmts start -->Last modified: 01 Aug 2021<!-- hhmts end -->
 </x:footer>
 #+end_export

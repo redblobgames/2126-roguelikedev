@@ -8,7 +8,7 @@ import { NUM_LAYERS, entities } from "./entity";
 import { WIDTH, HEIGHT, Edge, edgeJoins, gameMap } from "./map";
 import { xpForLevel, playerMoveBy, playerPickupItem, useItem, dropItem, playerGoDownStairs } from "./simulation";
 
-const VIEWWIDTH = 23, VIEWHEIGHT = 17;
+const VIEWWIDTH = 17, VIEWHEIGHT = 17;
 let DEBUG_ALL_VISIBLE = false;
 
 
@@ -24,7 +24,6 @@ const display = {
         else { return [-1, -1]; }
     },
 };
-display.el.setAttribute('viewBox', `0 0 ${VIEWWIDTH} ${VIEWHEIGHT}`);
 
 
 /** console messages */
@@ -68,6 +67,10 @@ export function draw() {
     document.querySelector<HTMLElement>("#health-bar").style.width = `${Math.ceil(100*player.hp/player.effective_max_hp)}%`;
     document.querySelector<HTMLElement>("#health-text").textContent = ` HP: ${player.hp} / ${player.effective_max_hp}`;
 
+    const debugScale = DEBUG_ALL_VISIBLE ? 1.5 : 1;
+    const viewWidth = VIEWWIDTH * debugScale;
+    const viewHeight = VIEWHEIGHT * debugScale;
+    
     // Draw the map
     let svgTileHtml = ``;
     let svgWallHtml = ``;
@@ -96,10 +99,10 @@ export function draw() {
         }
     }
     
-    for (let y = Math.floor(player.location.y - VIEWHEIGHT/2);
-         y <= Math.ceil(player.location.y + VIEWHEIGHT/2); y++) {
-        for (let x = Math.floor(player.location.x - VIEWWIDTH/2);
-             x <= Math.ceil(player.location.x + VIEWWIDTH/2); x++) {
+    for (let y = Math.floor(player.location.y - viewHeight/2);
+         y <= Math.ceil(player.location.y + viewHeight/2); y++) {
+        for (let x = Math.floor(player.location.x - viewWidth/2);
+             x <= Math.ceil(player.location.x + viewWidth/2); x++) {
             let lit = gameMap.isVisible(player.location, {x, y});
             if (lit || explored(x, y)) {
                 let bg = lit ? "hsl(50, 5%, 35%)" : "hsl(250, 10%, 25%)";
@@ -109,7 +112,11 @@ export function draw() {
             drawEdge({x, y, s: 'N'});
         }
     }
-    display.el.querySelector<HTMLElement>(".view").style.transform = `translate(${-player.location.x-0.5+VIEWWIDTH/2}px, ${-player.location.y-0.5+VIEWHEIGHT/2}px)`;
+    display.el.querySelector<HTMLElement>(".view").style.transform =
+        `translate(50px, 50px) 
+         scale(${100/viewWidth}, ${100/viewHeight})
+         translate(-0.5px, -0.5px)
+         translate(${-player.location.x}px, ${-player.location.y}px)`;
     display.el.querySelector(".map").innerHTML = svgTileHtml + svgWallHtml;
 
     // Draw the entities on top of the map. This is a little tricky in
@@ -135,7 +142,7 @@ export function draw() {
                 <use class="entity-bg" width="1" height="1" href="#${sprite}"/>
                 <use class="entity-fg" width="1" height="1" href="#${sprite}" fill="${fg}"/>
             `;
-            node.style.transform = `translate(${entity.location.x}px,${entity.location.y}px)`;
+            node.style.transform = `translate(${entity.location.x}px,${entity.location.y}px) translate(0.5px,0.5px) scale(0.9) translate(-0.5px,-0.5px)`;
             spritesToDraw[layer].set(entity.id, node);
         }
     }

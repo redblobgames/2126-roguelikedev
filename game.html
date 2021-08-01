@@ -1,14 +1,23 @@
 <figure id="game-container">
-  <svg id="game" tabindex="1">
-    <g class="view">
-      <g class="map" />
-      <g class="entities-0" />
-      <g class="entities-1" />
-      <g class="entities-2" />
-      <g class="entities-3" />
-      <g class="entities-4" />
-      <g class="entities-5" />
+  <svg id="game" tabindex="1" viewBox="0 0 150 100">
+    <g class="contain-view">
+      <g class="view">
+        <g class="map" />
+        <g class="entities-0" />
+        <g class="entities-1" />
+        <g class="entities-2" />
+        <g class="entities-3" />
+        <g class="entities-4" />
+        <g class="entities-5" />
+      </g>
     </g>
+    <g class="inventory">
+      <rect width="100"  height="100"  fill="black" />
+    </g>
+    <defs>
+      <clipPath id="clip-view"><rect width="100" height="100" /></clipPath>
+      <clipPath id="clip-inventory"><rect width="50" height="100" /></clipPath>
+    </defs>
   </svg>
   <div id="status-bar"></div>
   <div id="health-bar"></div>
@@ -49,12 +58,20 @@
         outline: none;
         opacity: 1.0;
     }
-    svg#game text {
+    svg#view text {
         font-size: 1px;
         transform: translate(0, -0.2px);
         font-family: monospace, sans-serif;
     }
 
+    svg#game .contain-view {
+        clip-path: url(#clip-view);
+    }
+    svg#game .inventory {
+        transform: translate(100px, 0px);
+        clip-path: url(#clip-inventory);
+    }
+    
     svg .entity, svg .view {
         transition: transform 0.1s ease-out;
     }
