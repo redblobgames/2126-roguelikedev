@@ -18,30 +18,22 @@ function canMoveTo(entity: EntityOnMap, x: number, y: number): boolean {
 //////////////////////////////////////////////////////////////////////
 // entities
 
-/** swap an inventory item with an equipment slot */
-function swapEquipment(entity: Entity, inventory_slot: number, equipment_slot: number) {
-    let heldId = entity.inventory[inventory_slot],
-        equippedId = entity.equipment[equipment_slot];
-    if (heldId === null) throw `invalid: swap equipment must be with non-empty inventory slot`;
+/** swap a map item with an equipment slot */
+function swapEquipment(creature: Entity, equipment_slot: number, itemOnGround: EntityOnMap) {
+    let equippedId = creature.equipment[equipment_slot];
     if (equippedId === null) throw `invalid: swap equipment must be with non-empty equipment slot`;
     
-    let held = entities.get(heldId);
     let equipped = entities.get(equippedId);
-    if (!('carried_by' in held.location)) throw `invalid: inventory item not being held`;
-    if (held.location.carried_by !== entity.id) throw `invalid: inventory item not held by entity`;
-    if (held.location.slot !== inventory_slot) throw `invalid: inventory item not held in correct slot`;
     if (!('equipped_by' in equipped.location)) throw `invalid: item not equipped`;
-    if (equipped.location.equipped_by !== entity.id) throw `invalid: item not equipped by entity`;
+    if (equipped.location.equipped_by !== creature.id) throw `invalid: item not equipped by entity`;
     if (equipped.location.slot !== equipment_slot) throw `invalid: item not equipped in correct slot`;
     
-    let held_equipment_slot = held.equipment_slot;
-    if (held_equipment_slot === undefined) throw `invalid: swap equipment must be with something equippable`;
-    if (held_equipment_slot !== equipment_slot) throw `invalid: swap equipment must be to the correct slot`;
+    if (itemOnGround.equipment_slot === undefined) throw `invalid: swap equipment must be with something equippable`;
+    if (itemOnGround.equipment_slot !== equipment_slot) throw `invalid: swap equipment must be to the correct slot`;
     
-    entity.inventory[inventory_slot] = equippedId;
-    entity.equipment[equipment_slot] = heldId;
-    held.location = {equipped_by: entity.id, slot: equipment_slot};
-    equipped.location = {carried_by: entity.id, slot: inventory_slot};
+    creature.equipment[equipment_slot] = itemOnGround.id;
+    equipped.location = itemOnGround.location; // drop
+    (itemOnGround as Entity).location = {equipped_by: creature.id, slot: equipment_slot}; // pick up
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -71,62 +63,55 @@ function gainXp(entity: Entity, amount: number) {
 export function useItem(entity: EntityOnMap, item: Entity) {
     const player = entities.player;
     switch (item.type) {
-    case 'healing potion': {
-        const healing = 40;
-        if (entity.hp === entity.effective_max_hp) {
-            print(`You are already at full health`, 'warning');
-        } else {
-            print(`Your wounds start to feel better!`, 'healing');
-            entity.hp = clamp(entity.hp + healing, 0, entity.effective_max_hp);
-            entities.moveEntityTo(item, NOWHERE);
-            enemiesMove();
+        case 'healing potion': {
+            const healing = 40;
+            if (entity.hp === entity.effective_max_hp) {
+                print(`You are already at full health`, 'warning');
+            } else {
+                print(`Your wounds start to feel better!`, 'healing');
+                entity.hp = clamp(entity.hp + healing, 0, entity.effective_max_hp);
+                entities.moveEntityTo(item, NOWHERE);
+                enemiesMove();
+            }
+            break;
         }
-        break;
-    }
-    case 'lightning scroll': {
-        if (castLighting(entity)) {
-            entities.moveEntityTo(item, NOWHERE);
-            enemiesMove();
-            draw();
+        case 'lightning scroll': {
+            if (castLighting(entity)) {
+                entities.moveEntityTo(item, NOWHERE);
+                enemiesMove();
+                draw();
+            }
+            break;
         }
-        break;
-    }
-    case 'fireball scroll': {
-        targetingOverlay.open(
-            `Click a location to cast fireball, or <kbd>ESC</kbd> to cancel`,
-            (x, y) => {
-                if (castFireball(entity, x, y)) {
-                    entities.moveEntityTo(item, NOWHERE);
-                    enemiesMove();
-                }
-                targetingOverlay.close();
-                draw();
-            });
-        break;
-    }
-    case 'confusion scroll': {
-        targetingOverlay.open(
-            `Click on an enemy to confuse it, or <kbd>ESC</kbd> to cancel`,
-            (x, y) => {
-                if (castConfusion(entity, x, y)) {
-                    entities.moveEntityTo(item, NOWHERE);
-                    enemiesMove();
-                }
-                targetingOverlay.close();
-                draw();
-            });
-        break;
-    }
-    default: {
-        if ('equipment_slot' in item && 'slot' in item.location) {
-            let oldItem = entities.get(player.equipment[item.equipment_slot]);
-            swapEquipment(player, item.location.slot, item.equipment_slot);
-            print(`You unquip ${oldItem.type} and equip ${item.type}.`, 'welcome');
-            enemiesMove();
-        } else {
+        case 'fireball scroll': {
+            targetingOverlay.open(
+                `Click a location to cast fireball, or <kbd>ESC</kbd> to cancel`,
+                (x, y) => {
+                    if (castFireball(entity, x, y)) {
+                        entities.moveEntityTo(item, NOWHERE);
+                        enemiesMove();
+                    }
+                    targetingOverlay.close();
+                    draw();
+                });
+            break;
+        }
+        case 'confusion scroll': {
+            targetingOverlay.open(
+                `Click on an enemy to confuse it, or <kbd>ESC</kbd> to cancel`,
+                (x, y) => {
+                    if (castConfusion(entity, x, y)) {
+                        entities.moveEntityTo(item, NOWHERE);
+                        enemiesMove();
+                    }
+                    targetingOverlay.close();
+                    draw();
+                });
+            break;
+        }
+        default: {
             throw `useItem on unknown item ${item}`;
         }
-    }
     }
 }
 
@@ -236,14 +221,20 @@ export function playerPickupItem() {
         return;
     }
 
-    let slot = player.inventory.indexOf(null); // first open inventory slot
-    if (slot < 0) {
-        print(`You cannot carry any more. Your inventory is full.`, 'warning');
-        return;
+    if (item.equipment_slot) {
+        let oldItem = entities.get(player.equipment[item.equipment_slot]);
+        swapEquipment(player, item.equipment_slot, item);
+        print(`You unquip ${oldItem.type} and equip ${item.type}.`, 'welcome');
+    } else {
+        let slot = player.inventory.indexOf(null); // first open inventory slot
+        if (slot < 0) {
+            print(`You cannot carry any more. Your inventory is full.`, 'warning');
+            return;
+        }
+        print(`You pick up the ${item.name}!`, 'pick-up');
+        entities.moveEntityTo(item, {carried_by: player.id, slot});
     }
-
-    print(`You pick up the ${item.name}!`, 'pick-up');
-    entities.moveEntityTo(item, {carried_by: player.id, slot});
+    
     enemiesMove();
 }
 

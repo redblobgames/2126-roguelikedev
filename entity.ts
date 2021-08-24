@@ -10,8 +10,8 @@ export const NOWHERE = {nowhere: true};
 export type Location =
       typeof NOWHERE
     | Point                                 // on map
-    | {carried_by: number; slot: number;}   // allowed only if .item
-    | {equipped_by: number; slot: number;}  // allowed only if .equipment == slot
+    | {carried_by: number; slot: number;}   // allowed only if .item and not .equipment_slot
+    | {equipped_by: number; slot: number;}  // allowed only if .equipment_slot == slot
 
 export type EntityAt<LocationType> = {
     id: number;
@@ -22,7 +22,7 @@ export type EntityAt<LocationType> = {
     render_order?: number;
     visuals: any[];
     location: LocationType;
-    inventory: (number | null)[]; // should only contain entities with .item
+    inventory: (number | null)[]; // should only contain entities with .item and not .equipment_slot
     equipment: (number | null)[]; // should only contain items with .equipment_slot
     [key: string]: any;
 };

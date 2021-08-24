@@ -476,6 +476,12 @@ The first step was to take the existing =<svg>= element and subdivide it, so tha
 
 As a bonus, this split allowed me to adjust the size of the debug view. When you press ~o~, it now zooms out to show more of the map. For the underlying implementation I use an SVG =transform= on the two sides of the UI, and transforms can be easily animated using CSS transitions.
 
+** Equipment swaps
+
+Previously, you could pick up an item and then separately you could /swap/ it with your equipped item. As part of this inventory/item redesign I am changing the rules. You /can't hold equipment in inventory/. No more going through the dungeon holding 14 shields in your backpack. Instead, as soon as you pick up an item, you equip it, and you drop the item you previously had equipped.
+
+The tricky logic for swapping was in ~swapEquipment~. It handled swapping an inventory item with an equipped item. I changed this to handle swapping a map item with an equipped item. The function isn't used anywhere else so I didn't try to generalize this into swapping any item with any item. I'll do that only if I actually need that functionality. ("YAGNI")
+
 * Items
 :PROPERTIES:
 :CUSTOM_ID: items

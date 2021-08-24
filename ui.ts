@@ -161,7 +161,30 @@ export function draw() {
         previouslyDrawnSprites[layer] = spritesToDraw[layer];
     }
     
+    drawInventory();
     updateInstructions();
+}
+
+function drawInventory() {
+    const fontSize = 5, spacing = 6;
+    const area = display.el.querySelector(`.inventory`);
+    let buttonsHtml = ``;
+    for (let i = 1; i <= 9; i++) {
+        buttonsHtml += `<text y="${i*spacing}">${i}</text>`;
+        let entity = entities.get(entities.player.inventory[i-1]);
+        if (entity) {
+            let [sprite, fg] = entity.visuals;
+            buttonsHtml += `<g class="entity" transform="translate(${spacing}, ${i*spacing - fontSize})">
+                              <use class="entity-bg" width="${fontSize}" height="${fontSize}" href="#${sprite}"/>
+                              <use class="entity-fg" width="${fontSize}" height="${fontSize}" href="#${sprite}" fill="${fg}"/>
+                            </g>
+                            <text x="${spacing*2}" y="${i*spacing}">${entity.name}</text>`;
+        }
+    }
+    area.innerHTML = `<rect width="100" height="100" fill="gray" />
+      <g font-size="${fontSize}" font-family="sans-serif">
+        ${buttonsHtml}
+      </g>`;
 }
 
 function updateInstructions() {
