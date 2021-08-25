@@ -10,20 +10,20 @@ export const NOWHERE = {nowhere: true};
 export type Location =
       typeof NOWHERE
     | Point                                 // on map
-    | {carried_by: number; slot: number;}   // allowed only if .item and not .equipment_slot
+    | {carried_by: number; slot: number;}   // allowed only if .inventory_slot == slot
     | {equipped_by: number; slot: number;}  // allowed only if .equipment_slot == slot
 
 export type EntityAt<LocationType> = {
     id: number;
     type: string;
     blocks?: boolean;
-    item?: boolean;
-    equipment_slot?: any;
+    inventory_slot?: number;
+    equipment_slot?: number;
     render_order?: number;
     visuals: any[];
     location: LocationType;
-    inventory: (number | null)[]; // should only contain entities with .item and not .equipment_slot
-    equipment: (number | null)[]; // should only contain items with .equipment_slot
+    inventory: Set<number>;       // unordered, should only contain entities with .inventory_slot
+    equipment: (number | null)[]; // indexed by slot, should only contain entities with .equipment_slot
     [key: string]: any;
 };
 export type Entity = EntityAt<Location>;
@@ -31,7 +31,7 @@ export type EntityOnMap = EntityAt<Point>;
 
 /** Entity properties that are shared among all the instances of the type.
     visuals: [sprite name, color]
-    item: true if can go into inventory
+    inventory_slot: 1-9 if it can go into inventory, undefined otherwise
     equipment_slot: 0–25 if it can go into equipment, undefined otherwise
 */
 export const NUM_LAYERS = 6;
@@ -43,14 +43,14 @@ const ENTITY_PROPERTIES = {
     troll:  { blocks: true, render_layer: 3, visuals: ['minotaur', "hsl(120, 60%, 60%)"], xp_award: 100, },
     orc:    { blocks: true, render_layer: 3, visuals: ['bully-minion', "hsl(100, 50%, 60%)"], xp_award: 35, },
     corpse: { blocks: false, render_layer: 0, visuals: ['carrion', "darkred"], },
-    'healing potion': { item: true, render_layer: 2, visuals: ['health-potion', "hsl(330, 50%, 75%)"], },
-    'lightning scroll': { item: true, render_layer: 2, visuals: ['scroll-unfurled', "hsl(60, 50%, 75%)"], },
-    'fireball scroll': { item: true, render_layer: 2, visuals: ['scroll-unfurled', "hsl(0, 50%, 60%)"], },
-    'confusion scroll': { item: true, render_layer: 2, visuals: ['scroll-unfurled', "hsl(0, 100%, 75%)"], },
-    dagger: { item: true, equipment_slot: EQUIP_MAIN_HAND, render_layer: 2, bonus_power: 0, visuals: ['plain-dagger', "hsl(200, 30%, 90%)"], },
-    sword: { item: true, equipment_slot: EQUIP_MAIN_HAND, render_layer: 2, bonus_power: 3, visuals: ['broadsword', "hsl(200, 30%, 90%)"], },
-    towel: { item: true, equipment_slot: EQUIP_OFF_HAND, render_layer: 2, bonus_defense: 0, visuals: ['towel', "hsl(40, 50%, 80%)"], },
-    shield: { item: true, equipment_slot: EQUIP_OFF_HAND, render_layer: 2, bonus_defense: 1, visuals: ['shield', "hsl(40, 50%, 80%)"], },
+    'healing potion':   { inventory_slot: 1, render_layer: 2, visuals: ['health-potion', "hsl(330, 50%, 75%)"], },
+    'lightning scroll': { inventory_slot: 2, render_layer: 2, visuals: ['scroll-unfurled', "hsl(60, 50%, 75%)"], },
+    'fireball scroll':  { inventory_slot: 3, render_layer: 2, visuals: ['scroll-unfurled', "hsl(0, 50%, 60%)"], },
+    'confusion scroll': { inventory_slot: 4, render_layer: 2, visuals: ['scroll-unfurled', "hsl(0, 100%, 75%)"], },
+    dagger: { equipment_slot: EQUIP_MAIN_HAND, render_layer: 2, bonus_power: 0, visuals: ['plain-dagger', "hsl(200, 30%, 90%)"], },
+    sword:  { equipment_slot: EQUIP_MAIN_HAND, render_layer: 2, bonus_power: 3, visuals: ['broadsword', "hsl(200, 30%, 90%)"], },
+    towel:  { equipment_slot: EQUIP_OFF_HAND, render_layer: 2, bonus_defense: 0, visuals: ['towel', "hsl(40, 50%, 80%)"], },
+    shield: { equipment_slot: EQUIP_OFF_HAND, render_layer: 2, bonus_defense: 1, visuals: ['shield', "hsl(40, 50%, 80%)"], },
 };
 /* Always use the current value of 'type' to get the entity
     properties, so that we can change the object type later (e.g. to
@@ -109,7 +109,8 @@ export class Entities extends Map<number, Entity> {
 
     /** return an item at (x, y) or null if there isn't one */
     itemAt(x: number, y: number) {
-        let entities = this.allAt(x, y).filter(e => e.item);
+        let entities = this.allAt(x, y).filter(
+            e => e.inventory_slot !== undefined || e.equipment_slot !== undefined);
         return entities[0] ?? null;
     }
 
@@ -122,23 +123,23 @@ export class Entities extends Map<number, Entity> {
 
     /** move an entity to a new location:
      *   {x:int y:int} on the map
-     *   {carried_by_by:id slot:int} in id's 'inventory' 
+     *   {carried_by_by:id slot:int} in id's inventory
      *   {equipped_by:id slot:int} is a valid location but NOT allowed here
      */
     moveEntityTo(entity: Entity, location: Location) {
+        if ('equipped_by' in location) throw `invalid: this function doesn't handle equipment`;
+        
         if ('carried_by' in entity.location) {
-            let {carried_by, slot} = entity.location;
-            let carrier = this.get(carried_by);
-            if (carrier.inventory[slot] !== entity.id) throw `invalid: inventory slot ${slot} contains ${carrier.inventory[slot]} but should contain ${entity.id}`;
-            carrier.inventory[slot] = null;
+            let carrier = this.get(entity.location.carried_by);
+            if (!carrier.inventory.has(entity.id)) throw `invalid: inventory does not contains entity ${entity.id}`;
+            carrier.inventory.delete(entity.id);
         }
         entity.location = location;
         if ('carried_by' in entity.location) {
-            let {carried_by, slot} = entity.location;
-            let carrier = this.get(carried_by);
+            let carrier = this.get(entity.location.carried_by);
             if (carrier.inventory === undefined) throw `invalid: moving to an entity without inventory`;
-            if (carrier.inventory[slot] !== null) throw `invalid: inventory already contains an item ${carrier.inventory[slot]} in slot ${slot}`;
-            carrier.inventory[slot] = entity.id;
+            if (carrier.inventory.has(entity.id)) throw `invalid: inventory already contains item ${entity.id}`;
+            carrier.inventory.add(entity.id);
         }
     }
 }
@@ -151,10 +152,6 @@ export let entities = new Entities();
 
 // The player is also a global singleton, but I put it inside the
 // entities object
-/** inventory is represented as an array with (null | entity.id) */
-function createInventoryArray(capacity: number): any[] {
-    return Array.from({length: capacity}, () => null);
-}
 
 entities.player = (function() {
     let player = entities.create(
@@ -163,14 +160,15 @@ entities.player = (function() {
             base_max_hp: 100,
             base_defense: 1, base_power: 4,
             xp: 0, level: 1,
-            inventory: createInventoryArray(26),
-            equipment: createInventoryArray(26),
+            inventory: new Set(),
+            equipment: Array.from({length: 25}, () => null),
         }
     ) as EntityOnMap; // NOTE: I'm lying, as it's not actually this type yet until I move the player to the first room
 
     // Insert the initial equipment with the correct invariants
     function equip(slot: number, type: string) {
-        let entity = entities.create(type, {equipped_by: player.id, slot: slot});
+        let entity = entities.create(type, NOWHERE);
+        entity.location = {equipped_by: player.id, slot: slot};
         player.equipment[slot] = entity.id;
     }
     equip(EQUIP_MAIN_HAND, 'dagger');

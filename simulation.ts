@@ -225,14 +225,11 @@ export function playerPickupItem() {
         let oldItem = entities.get(player.equipment[item.equipment_slot]);
         swapEquipment(player, item.equipment_slot, item);
         print(`You unquip ${oldItem.type} and equip ${item.type}.`, 'welcome');
+    } else if (item.inventory_slot) {
+        print(`You pick up the ${item.name}.`, 'pick-up');
+        entities.moveEntityTo(item, {carried_by: player.id, slot: item.inventory_slot});
     } else {
-        let slot = player.inventory.indexOf(null); // first open inventory slot
-        if (slot < 0) {
-            print(`You cannot carry any more. Your inventory is full.`, 'warning');
-            return;
-        }
-        print(`You pick up the ${item.name}!`, 'pick-up');
-        entities.moveEntityTo(item, {carried_by: player.id, slot});
+        throw `invalid: tried to pick up an item that was neither equipment nor inventory`;
     }
     
     enemiesMove();

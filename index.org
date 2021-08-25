@@ -482,6 +482,14 @@ Previously, you could pick up an item and then separately you could /swap/ it wi
 
 The tricky logic for swapping was in ~swapEquipment~. It handled swapping an inventory item with an equipped item. I changed this to handle swapping a map item with an equipped item. The function isn't used anywhere else so I didn't try to generalize this into swapping any item with any item. I'll do that only if I actually need that functionality. ("YAGNI")
 
+** Inventory slots
+
+Inventory items are now only consumables. I want them to be stackable. I decided that instead of each /item/ taking up a slot in your inventory, each item /type/ takes up a slot. I think this makes the UI simpler but the gameplay less roguelike, but since this is an experimental project I wanted to see where this would lead.
+
+Previously inventory was an /array/ with 25 entries, each containing either an entity id or null. I changed this to a /set/ with unlimited entries, each an entity id.
+
+I'll adjust the game balance later.
+
 * Items
 :PROPERTIES:
 :CUSTOM_ID: items

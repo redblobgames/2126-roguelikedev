@@ -166,20 +166,24 @@ export function draw() {
 }
 
 function drawInventory() {
-    const fontSize = 5, spacing = 6;
+    const fontSize = 4.5, spacing = 4, overlaySpacing = 1, verticalSpacing = 6;
     const area = display.el.querySelector(`.inventory`);
     let buttonsHtml = ``;
-    for (let i = 1; i <= 9; i++) {
-        buttonsHtml += `<text y="${i*spacing}">${i}</text>`;
-        let entity = entities.get(entities.player.inventory[i-1]);
-        if (entity) {
+    let carriedByPlayer = Array.from(entities.player.inventory.keys()).map(id => entities.get(id));
+    for (let slot = 1; slot <= 9; slot++) {
+        buttonsHtml += `<g transform="translate(0, ${slot*verticalSpacing})">`;
+        buttonsHtml += `<text>${slot}</text>`;
+        let entitiesOfType = carriedByPlayer.filter(entity => entity.inventory_slot === slot);
+        for (let i = 0; i < entitiesOfType.length; i++) {
+            let entity = entitiesOfType[i];
             let [sprite, fg] = entity.visuals;
-            buttonsHtml += `<g class="entity" transform="translate(${spacing}, ${i*spacing - fontSize})">
+            buttonsHtml += `<g class="entity" transform="translate(${spacing + overlaySpacing * i}, ${-fontSize})">
                               <use class="entity-bg" width="${fontSize}" height="${fontSize}" href="#${sprite}"/>
                               <use class="entity-fg" width="${fontSize}" height="${fontSize}" href="#${sprite}" fill="${fg}"/>
-                            </g>
-                            <text x="${spacing*2}" y="${i*spacing}">${entity.name}</text>`;
+                           </g>`;
+            if (i === 0) buttonsHtml += `<text x="${spacing*3}">${entity.name}</text>`;
         }
+        buttonsHtml += `</g>`;
     }
     area.innerHTML = `<rect width="100" height="100" fill="gray" />
       <g font-size="${fontSize}" font-family="sans-serif">
@@ -195,10 +199,8 @@ function updateInstructions() {
     let html = ``;
     if (currentKeyHandler() === handlePlayerKeys) {
         html = `Arrows move`;
-        let hasItems = player.inventory.filter((id: number|null) => id !== null).length > 0;
         let onItem = standingOn.filter(e => e.item).length > 0;
         let onStairs = standingOn.filter(e => e.stairs).length > 0;
-        if (hasItems) html += `, <kbd>U</kbd>se, <kbd>D</kbd>rop`;
         if (onItem) html += `, <kbd>G</kbd>et item`;
         if (onStairs) html += `, <kbd>&gt;</kbd> stairs`;
     }
@@ -324,37 +326,6 @@ function createUpgradeOverlay() {
     };
 }
 
-function createInventoryOverlay(actionType: string) {
-    const overlay = document.querySelector(`#inventory-${actionType}`);
-    let visible = false;
-
-    function draw() {
-        let html = `<ul>`;
-        let empty = true;
-        entities.player.inventory.forEach((id: number|null, slot: number) => {
-            if (id !== null) {
-                let item = entities.get(id);
-                html += `<li><kbd>${String.fromCharCode(65 + slot)}</kbd> ${item.name}</li>`;
-                empty = false;
-            }
-        });
-        html += `</ul>`;
-        if (empty) {
-            html = `<div>Your inventory is empty. Press <kbd>ESC</kbd> to cancel.</div>${html}`;
-        } else {
-            html = `<div>Select an item to ${actionType} it, or <kbd>ESC</kbd> to cancel.</div>${html}`;
-        }
-        overlay.innerHTML = html;
-    }
-
-    return {
-        get visible() { return visible; },
-        open() { visible = true; overlay.classList.add('visible'); draw(); },
-        close() { visible = false; overlay.classList.remove('visible'); },
-    };
-}
-
-
 function handlePlayerDeadKeys(key: string): Action {
     const actions = {
         o:  ['toggle-debug'],
@@ -376,8 +347,15 @@ function handlePlayerKeys(key: string): Action {
         z:           ['move', 0, 0],
         g:           ['pickup'],
         '>':         ['stairs-down'],
-        u:           ['inventory-open-use'],
-        d:           ['inventory-open-drop'],
+        '1':         ['use', 1],
+        '2':         ['use', 2],
+        '3':         ['use', 3],
+        '4':         ['use', 4],
+        '5':         ['use', 5],
+        '6':         ['use', 6],
+        '7':         ['use', 7],
+        '8':         ['use', 8],
+        '9':         ['use', 9],
     };
     let action = actions[key];
     return action || handlePlayerDeadKeys(key);
@@ -392,20 +370,6 @@ function handleUpgradeKeys(key: string): Action {
     return actions[key];
 }
 
-function handleInventoryKeys(action: string): (key: string) => Action {
-    return key => {
-        if (key === 'Escape') { return [`inventory-close-${action}`]; }
-        let slot = key.charCodeAt(0) - 'a'.charCodeAt(0);
-        if (0 <= slot && slot < 26) {
-            let id = entities.player.inventory[slot];
-            if (id !== null) {
-                return [`inventory-do-${action}`, id];
-            }
-        }
-        return undefined;
-    };
-}
-
 function handleCharacterKeys(key: string): Action {
     return (key === 'Escape' || key == 'c') && ['character-close'];
 }
@@ -417,59 +381,53 @@ function handleTargetingKeys(key: string): Action {
 function runAction(action: Action) {
     const player = entities.player;
     switch (action[0]) {
-    case 'move': {
-        let [_, dx, dy] = action;
-        playerMoveBy(dx, dy);
-        break;
-    }
-
-    case 'pickup':               { playerPickupItem();           break; }
-    case 'stairs-down':          { playerGoDownStairs();         break; }
-    case 'inventory-open-use':   { inventoryOverlayUse.open();   break; }
-    case 'inventory-close-use':  { inventoryOverlayUse.close();  break; }
-    case 'inventory-open-drop':  { inventoryOverlayDrop.open();  break; }
-    case 'inventory-close-drop': { inventoryOverlayDrop.close(); break; }
-    case 'character-open':       { characterOverlay.open();      break; }
-    case 'character-close':      { characterOverlay.close();     break; }
-    case 'targeting-cancel':     { targetingOverlay.close();     break; }
-
-    case 'upgrade': {
-        let [_, stat] = action;
-        switch (stat) {
-        case 'hp':
-            player.base_max_hp += 20;
-            player.hp += 20;
+        case 'move': {
+            let [_, dx, dy] = action;
+            playerMoveBy(dx, dy);
             break;
-        case 'str':
-            player.base_power += 1;
-            break;
-        case 'def':
-            player.base_defense += 1;
-            break;
-        default:
-            throw `invalid upgrade ${stat}`;
         }
-        upgradeOverlay.close();
-        break;
-    }
-    case 'inventory-do-use': {
-        let [_, id] = action;
-        inventoryOverlayUse.close();
-        useItem(player, entities.get(id));
-        break;
-    }
-    case 'inventory-do-drop': {
-        let [_, id] = action;
-        inventoryOverlayDrop.close();
-        dropItem(player, entities.get(id));
-        break;
-    }
-    case 'toggle-debug': {
-        DEBUG_ALL_VISIBLE = !DEBUG_ALL_VISIBLE;
-        break;
-    }
-    default:
-        throw `unhandled action ${action}`;
+
+        case 'pickup':               { playerPickupItem();           break; }
+        case 'stairs-down':          { playerGoDownStairs();         break; }
+        case 'character-open':       { characterOverlay.open();      break; }
+        case 'character-close':      { characterOverlay.close();     break; }
+        case 'targeting-cancel':     { targetingOverlay.close();     break; }
+
+        case 'use': {
+            let [_, inventory_slot] = action;
+            let candidates = (Array.from(player.inventory.keys()) as number[])
+                                 .map(id => entities.get(id))
+                                 .filter(entity => entity.inventory_slot === inventory_slot);
+            if (candidates.length > 0) {
+                useItem(player, candidates[0]);
+            }
+            break;
+        }
+        case 'upgrade': {
+            let [_, stat] = action;
+            switch (stat) {
+                case 'hp':
+                    player.base_max_hp += 20;
+                    player.hp += 20;
+                    break;
+                case 'str':
+                    player.base_power += 1;
+                    break;
+                case 'def':
+                    player.base_defense += 1;
+                    break;
+                default:
+                    throw `invalid upgrade ${stat}`;
+            }
+            upgradeOverlay.close();
+            break;
+        }
+        case 'toggle-debug': {
+            DEBUG_ALL_VISIBLE = !DEBUG_ALL_VISIBLE;
+            break;
+        }
+        default:
+            throw `unhandled action ${action}`;
     }
     draw();
 }
@@ -477,8 +435,6 @@ function runAction(action: Action) {
 function currentKeyHandler() {
     return targetingOverlay.visible? handleTargetingKeys
          : upgradeOverlay.visible? handleUpgradeKeys
-         : inventoryOverlayUse.visible? handleInventoryKeys('use')
-         : inventoryOverlayDrop.visible? handleInventoryKeys('drop')
          : characterOverlay.visible? handleCharacterKeys
          : entities.player.dead? handlePlayerDeadKeys
          : handlePlayerKeys;
@@ -516,11 +472,8 @@ function setupInputHandlers() {
     canvas.focus();
 }
 
-export const inventoryOverlayUse = createInventoryOverlay('use');
-export const inventoryOverlayDrop = createInventoryOverlay('drop');
 export const targetingOverlay = createTargetingOverlay();
 export const upgradeOverlay = createUpgradeOverlay();
 export const characterOverlay = createCharacterOverlay();
 setupInputHandlers();
 draw();
-
