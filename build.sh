@@ -1,2 +1,2 @@
 #!/bin/sh
-esbuild roguelike-dev.ts --bundle --platform=browser --sourcemap --outfile=_output.js
+esbuild roguelike-dev.ts --bundle --platform=browser --sourcemap --outfile=_bundle.js
