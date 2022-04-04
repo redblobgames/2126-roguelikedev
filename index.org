@@ -24,6 +24,11 @@ This year, instead of going through the tutorial again from scratch, I'm going t
 
 Source code: [[href:game.html][game.html]] + [[href:roguelike-dev.ts][roguelike-dev.ts]] (build with esbuild) - and [[https://github.com/redblobgames/2126-roguelikedev][on github]].
 
+#+begin_export html
+<aside>
+Status: I enjoyed the summer event but I was unable to finish all the chapters. I implemented thin walls, a new map generator, room-based visibility, inventory/items, and a different ui but never redesigned enemies or combat. Maybe next year!
+</aside>
+#+end_export
 * Setup
 :PROPERTIES:
 :CUSTOM_ID: setup
@@ -477,12 +482,18 @@ The first step was to take the existing =<svg>= element and subdivide it, so tha
 As a bonus, this split allowed me to adjust the size of the debug view. When you press ~o~, it now zooms out to show more of the map. For the underlying implementation I use an SVG =transform= on the two sides of the UI, and transforms can be easily animated using CSS transitions.
 
 ** Equipment swaps
+:PROPERTIES:
+:CUSTOM_ID: equipment-swaps
+:END:
 
 Previously, you could pick up an item and then separately you could /swap/ it with your equipped item. As part of this inventory/item redesign I am changing the rules. You /can't hold equipment in inventory/. No more going through the dungeon holding 14 shields in your backpack. Instead, as soon as you pick up an item, you equip it, and you drop the item you previously had equipped.
 
 The tricky logic for swapping was in ~swapEquipment~. It handled swapping an inventory item with an equipped item. I changed this to handle swapping a map item with an equipped item. The function isn't used anywhere else so I didn't try to generalize this into swapping any item with any item. I'll do that only if I actually need that functionality. ("YAGNI")
 
 ** Inventory slots
+:PROPERTIES:
+:CUSTOM_ID: inventory-slots
+:END:
 
 Inventory items are now only consumables. I want them to be stackable. I decided that instead of each /item/ taking up a slot in your inventory, each item /type/ takes up a slot. I think this makes the UI simpler but the gameplay less roguelike, but since this is an experimental project I wanted to see where this would lead.
 
@@ -496,6 +507,58 @@ I'll adjust the game balance later.
 :END:
 
 I really like the replay in Hades and Brogue, and wonder how much of that I can do with items and how much from maps or something else. Slay the Spire may be some inspiration here too, as some of the cards can significantly change the way you play.
+
+
+* Enemies
+:PROPERTIES:
+:CUSTOM_ID: enemies
+:END:
+
+TODO: ideas for handling enemies differently
+
+I'd like to make the enemies do more interesting things. One of the ideas for this project is to make the logic run at the room level instead of the individual tile level. In the previous section I described doing that for visibility. I'd also like to do this for enemies. Within a room, maybe enemies can work together somehow.
+
+- [ ] sidekicks — a monster might stay near another so that they can both attack the player together
+- [ ] henchmen — a monster might be able to call allies in nearby rooms
+- [ ] factions — there might be monsters who are unfriendly towards one another, and they might already be fighting each other when the player enters the room; one option would be to stay out of the way and sneak past them
+- [ ] movement — instead of always moving towards the player, monsters might patrol a fixed route, or guard a treasure, or only move towards you if startled or if you get close or if you make a sound (I'd have to add sounds)
+- [ ] spawning — instead of all monsters having spawned at the beginning, monsters might spawn other monsters, or generators might spawn monsters (but I need to be careful that these are not an infinite xp source)
+
+I'd also like to change enemy spawning from being per room to being per level. This could include
+
+- [ ] choosing how many monsters are on the main path vs side paths
+- [ ] placing bosses at the ends of side paths, guarding treasures
+- [ ] placing a big boss at the end of the level
+
+This will require map analysis, which is a whole 'nother topic.
+
+* Combat
+:PROPERTIES:
+:CUSTOM_ID: combat
+:END:
+
+TODO: ideas for doing combat differently
+
+* Controls
+:PROPERTIES:
+:CUSTOM_ID: controls
+:END:
+
+TODO: ideas for changing the control scheme
+
+How about ~W A S D~ controls? Or maybe entirely mouse-driven?
+
+* More map stuff
+:PROPERTIES:
+:CUSTOM_ID: more
+:END:
+
+- [ ] The map generator is too "open" because it connects all adjacent rooms. I'd like to turn this into a graph and form a minimum spanning tree or some other structure that constraints movement a little more.
+- [ ] identify main path vs side paths?
+- [ ] identify loops?
+- [ ] key and lock? but this may be boring so I'd want to use it sparingly
+- [ ] special rooms that behave differently from regular rooms, like cathedrals, shops, training grounds
+- [ ] decorate rooms with static items like torches and tapestries
 
 #+begin_export html
 <x:footer>
@@ -516,6 +579,6 @@ I really like the replay in Hades and Brogue, and wonder how much of that I can 
   </style>
 
   Created 25 Jun 2021; &#160;
-  <!-- hhmts start -->Last modified: 01 Aug 2021<!-- hhmts end -->
+  <!-- hhmts start -->Last modified: 08 Nov 2021<!-- hhmts end -->
 </x:footer>
 #+end_export
