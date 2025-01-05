@@ -213,7 +213,7 @@ I also tried a logarithmic series and a geometric series to vary the sizes, but 
 
 [[./screenshots/ch1-camera-position.png]]
 
-The next step will be to adjust the /tile size/ also. This will create a "fish eye lens" effect. Will it be annoying? In many 3d games you can see detail on the close up monsters while seeing a large area in the distance. But in a top down 2d grid? HyperRogue solves this with hyperbolic geometry but I wanted to see how far I could get while keeping the grid lines straight.
+The next step will be to adjust the /tile size/ also. This will create a "fish eye lens" effect. Will it be annoying? In many 3D games you can see detail on the close up monsters while seeing a large area in the distance. But in a top down 2D grid? HyperRogue solves this with hyperbolic geometry but I wanted to see how far I could get while keeping the grid lines straight.
 
 #+begin_export html
 <figure>
@@ -579,6 +579,6 @@ How about ~W A S D~ controls? Or maybe entirely mouse-driven?
   </style>
 
   Created 25 Jun 2021; &#160;
-  <!-- hhmts start -->Last modified: 04 Jul 2022<!-- hhmts end -->
+  <!-- hhmts start -->Last modified: 02 Jan 2025<!-- hhmts end -->
 </x:footer>
 #+end_export
